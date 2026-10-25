@@ -1,0 +1,204 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  STUDENT
+  MAINTENANCE
+  ADMIN
+}
+
+enum IssueStatus {
+  REPORTED
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  RESOLVED
+  CLOSED
+}
+
+enum IssuePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NotificationType {
+  ISSUE_CREATED
+  ISSUE_ASSIGNED
+  STATUS_UPDATED
+  COMMENT_ADDED
+  ISSUE_RESOLVED
+  ISSUE_CLOSED
+  SYSTEM
+}
+
+enum HistoryAction {
+  CREATED
+  ASSIGNED
+  STATUS_CHANGED
+  PRIORITY_CHANGED
+  COMMENT_ADDED
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  fullName     String   @map("full_name")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  studentNumber String? @unique @map("student_number")
+  phone        String?
+  role         UserRole @default(STUDENT)
+  blockId      String?  @map("block_id")
+  roomNumber   String?  @map("room_number")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  block         ResidenceBlock? @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  reportedIssues MaintenanceIssue[] @relation("ReportedIssues")
+  assignedIssues MaintenanceIssue[] @relation("AssignedIssues")
+  notifications Notification[]
+  historyEntries IssueHistory[]
+  feedback      IssueFeedback[]
+
+  @@index([role])
+  @@index([blockId])
+  @@map("users")
+}
+
+model ResidenceBlock {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  users  User[]
+  issues MaintenanceIssue[]
+
+  @@map("residence_blocks")
+}
+
+model IssueCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  issues MaintenanceIssue[]
+
+  @@map("issue_categories")
+}
+
+model MaintenanceIssue {
+  id          String        @id @default(cuid())
+  reference   String        @unique
+  title       String
+  description String        @db.Text
+  status      IssueStatus   @default(REPORTED)
+  priority    IssuePriority @default(MEDIUM)
+
+  reporterId  String @map("reporter_id")
+  assigneeId  String? @map("assignee_id")
+  categoryId  String @map("category_id")
+  blockId     String @map("block_id")
+  roomNumber  String? @map("room_number")
+  location    String?
+  imageUrl    String? @map("image_url")
+
+  reportedAt  DateTime  @default(now()) @map("reported_at")
+  assignedAt  DateTime? @map("assigned_at")
+  startedAt   DateTime? @map("started_at")
+  resolvedAt  DateTime? @map("resolved_at")
+  closedAt    DateTime? @map("closed_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  reporter  User          @relation("ReportedIssues", fields: [reporterId], references: [id], onDelete: Restrict)
+  assignee  User?         @relation("AssignedIssues", fields: [assigneeId], references: [id], onDelete: SetNull)
+  category  IssueCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  block     ResidenceBlock @relation(fields: [blockId], references: [id], onDelete: Restrict)
+  history   IssueHistory[]
+  feedback  IssueFeedback?
+
+  @@index([status])
+  @@index([priority])
+  @@index([reporterId])
+  @@index([assigneeId])
+  @@index([categoryId])
+  @@index([blockId])
+  @@index([reportedAt])
+  @@index([status, priority])
+  @@map("maintenance_issues")
+}
+
+model IssueHistory {
+  id        String        @id @default(cuid())
+  issueId   String        @map("issue_id")
+  userId    String?       @map("user_id")
+  action    HistoryAction
+  oldValue  String?       @map("old_value")
+  newValue  String?       @map("new_value")
+  comment   String?       @db.Text
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  issue MaintenanceIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([issueId, createdAt])
+  @@index([userId])
+  @@map("issue_history")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  isRead    Boolean          @default(false) @map("is_read")
+  issueId   String?          @map("issue_id")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([issueId])
+  @@map("notifications")
+}
+
+model IssueFeedback {
+  id        String   @id @default(cuid())
+  issueId   String   @unique @map("issue_id")
+  userId    String   @map("user_id")
+  rating    Int
+  comment   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue MaintenanceIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@map("issue_feedback")
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   @db.Text
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
