@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { AuthBrand } from './AuthParts'
 import { apiSignup } from '../api'
+import { PasswordInput } from '../components/PasswordInput'
 import { useApp } from '../context/appContext'
 import { BLOCKS } from '../data/constants'
 
@@ -94,12 +95,12 @@ export function Signup() {
           </div>
           <div className="field">
             <label>Password</label>
-            <input type="password" value={form.password} onChange={field('password')} minLength={8} required />
+            <PasswordInput value={form.password} onChange={field('password')} minLength={8} autoComplete="new-password" required />
             <div className="field-hint">At least 8 characters.</div>
           </div>
           <div className="field">
             <label>Confirm password</label>
-            <input type="password" value={form.confirm} onChange={field('confirm')} required />
+            <PasswordInput value={form.confirm} onChange={field('confirm')} autoComplete="new-password" required />
           </div>
           {error && <div className="field-error">{error}</div>}
           <button className="btn btn-primary btn-block" type="submit" style={{ marginTop: 6 }} disabled={busy}>

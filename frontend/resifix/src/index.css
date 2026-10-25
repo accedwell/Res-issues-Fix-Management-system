@@ -500,3 +500,21 @@ table.simple tbody tr:hover td { background: rgba(77, 143, 240, .06); }
 .btn-danger:hover { background: #ff9393; border-color: transparent; }
 .btn-danger-ghost { background: transparent; color: var(--bad); border-color: rgba(255, 122, 122, .35); }
 .btn-danger-ghost:hover { background: var(--bad-bg); border-color: var(--bad); }
+
+/* Forgot password */
+.field-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.field-label-row label { margin-bottom: 0; }
+.field-label-row a { font-size: 12px; font-weight: 700; color: var(--mint-soft); text-decoration: none; }
+.field-label-row a:hover { text-decoration: underline; }
+.auth-notice { background: rgba(34, 199, 169, .1); border: 1px solid rgba(34, 199, 169, .4); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; color: var(--ink); margin: -6px 0 16px; line-height: 1.5; }
+.auth-notice code { font-size: 14px; font-weight: 800; letter-spacing: .12em; color: var(--mint-soft); }
+
+/* Password field with show/hide eye */
+.password-input { position: relative; }
+.field .password-input input { padding-right: 44px; }
+.password-toggle { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0; border: none; border-radius: 8px; background: transparent; color: var(--ink-soft); cursor: pointer; }
+.password-toggle:hover { color: var(--mint-soft); background: rgba(34, 199, 169, .1); }
+.password-toggle:focus-visible { outline: 2px solid var(--mint); outline-offset: 1px; }
+.password-toggle .icon-inline svg { width: 18px; height: 18px; }
+/* Hide the browser's own reveal button (Edge) so only one eye shows */
+.password-input input::-ms-reveal, .password-input input::-ms-clear { display: none; }

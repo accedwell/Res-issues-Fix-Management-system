@@ -72,6 +72,20 @@ export interface SignupInput {
   password: string
 }
 
+export interface ForgotPasswordResponse {
+  message: string
+  // Only sent by a development backend, because email isn't set up yet.
+  devCode?: string
+}
+
+export function apiForgotPassword(email: string): Promise<ForgotPasswordResponse> {
+  return request<ForgotPasswordResponse>('POST', '/auth/forgot-password', { email })
+}
+
+export function apiResetPassword(email: string, code: string, password: string): Promise<{ message: string }> {
+  return request<{ message: string }>('POST', '/auth/reset-password', { email, code, password })
+}
+
 export async function apiSignup(input: SignupInput): Promise<ApiUser> {
   const { token, user } = await request<AuthResponse>('POST', '/auth/signup', input)
   saveToken(token)

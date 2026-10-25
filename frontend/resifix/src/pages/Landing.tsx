@@ -182,7 +182,7 @@ export function Landing() {
             <span className="mark">RF</span>
             ResiFix
           </span>
-          <span>Student Residence Issue Reporting System · Prototype</span>
+          <span>Student Residence Issue Reporting System</span>
         </div>
       </footer>
     </div>

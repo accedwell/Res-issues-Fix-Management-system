@@ -78,6 +78,14 @@ export interface Setting {
   on: boolean;
 }
 
+// A pending "forgot password" request. Only a hash of the code is stored.
+export interface PasswordReset {
+  userId: string;
+  codeHash: string;
+  expiresAt: number;
+  attempts: number;
+}
+
 export interface Data {
   users: User[];
   issues: Issue[];
@@ -87,4 +95,6 @@ export interface Data {
   blocks: string[];
   // Running number used for issue references (ISS-<year>-<number>).
   nextIssueNumber: number;
+  // Optional so data files created before this feature still load.
+  passwordResets?: PasswordReset[];
 }

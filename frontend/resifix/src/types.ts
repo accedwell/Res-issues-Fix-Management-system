@@ -1,6 +1,6 @@
 export type Role = 'student' | 'admin' | 'maintenance' | 'sysadmin'
 
-export type Route = 'landing' | 'login' | 'signup'
+export type Route = 'landing' | 'login' | 'signup' | 'forgot'
 
 export type Status =
   | 'Submitted'

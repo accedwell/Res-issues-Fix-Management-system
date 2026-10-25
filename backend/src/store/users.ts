@@ -31,6 +31,13 @@ export async function insertUser(user: User): Promise<User> {
   return user;
 }
 
+export async function updatePassword(id: string, passwordHash: string): Promise<void> {
+  const user = db().users.find((u) => u.id === id);
+  if (!user) return;
+  user.passwordHash = passwordHash;
+  save();
+}
+
 export async function deleteUser(id: string): Promise<void> {
   const data = db();
   data.users = data.users.filter((u) => u.id !== id);
