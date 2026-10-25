@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppContext, type AppState } from './appContext'
+import { clearToken } from '../api'
 import { CATEGORIES, DEFAULT_TABS, STAFF } from '../data/constants'
 import { SEED_ISSUES, SEED_NOTIFICATIONS, SEED_SETTINGS, SEED_USERS } from '../data/seed'
 import type { Auth, Filters, Issue, Modal, Role, Route, Status } from '../types'
@@ -10,7 +11,6 @@ const LOGGED_OUT: Auth = { loggedIn: false, role: null, name: null, studentId: n
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState<Route>('landing')
-  const [authRole, setAuthRole] = useState<Role>('student')
   const [auth, setAuth] = useState<Auth>(LOGGED_OUT)
   const [tabs, setTabs] = useState<Record<Role, string>>({ ...DEFAULT_TABS })
   const [modal, setModal] = useState<Modal | null>(null)
@@ -62,14 +62,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppState = {
     route,
     setRoute,
-    authRole,
-    setAuthRole,
     auth,
-    login: (name, role) => {
-      setAuth({ loggedIn: true, role, name, studentId: role === 'student' ? 'stu-1' : null })
+    login: (name, role, userId) => {
+      setAuth({ loggedIn: true, role, name, studentId: role === 'student' ? userId : null })
       setTabs({ ...DEFAULT_TABS })
     },
     logout: () => {
+      clearToken()
       setModal(null)
       setAuth(LOGGED_OUT)
       setRoute('landing')

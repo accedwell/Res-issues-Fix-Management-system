@@ -12,18 +12,14 @@ const STEPS = [
 const TICKET_STAGES = ['Submitted', 'Assigned', 'In progress', 'Fixed']
 
 export function Landing() {
-  const { setRoute, setAuthRole } = useApp()
+  const { setRoute } = useApp()
 
   // Only students sign up; staff accounts are created by the system administrator.
   const studentSignup = () => {
-    setAuthRole('student')
     setRoute('signup')
   }
 
-  const staffLogin = () => {
-    setAuthRole('admin')
-    setRoute('login')
-  }
+  const staffLogin = () => setRoute('login')
 
   return (
     <div className="landing">
@@ -121,12 +117,6 @@ export function Landing() {
                 </div>
                 <Icon name="tools" />
               </div>
-            </div>
-            <div className="float-chip chip-a">
-              <Icon name="bell" /> Good news! Your light bulb has been replaced
-            </div>
-            <div className="float-chip chip-b">
-              <Icon name="star" /> “Fixed in a day!”
             </div>
           </div>
         </div>

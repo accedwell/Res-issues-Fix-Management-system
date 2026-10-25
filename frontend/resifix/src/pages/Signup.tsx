@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { AuthBrand } from './AuthParts'
+import { apiSignup } from '../api'
 import { useApp } from '../context/appContext'
 import { BLOCKS } from '../data/constants'
 
@@ -9,18 +10,39 @@ export function Signup() {
     first: '', last: '', id: '', email: '', block: BLOCKS[0], room: '', password: '', confirm: '',
   })
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
   const field = (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm({ ...form, [key]: e.target.value })
 
-  const submit = (e: FormEvent) => {
+  // Only students register themselves; staff accounts are created by the system administrator.
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters.')
+      return
+    }
     if (form.password !== form.confirm) {
       setError('Passwords do not match.')
       return
     }
-    // Only students register themselves; staff accounts are created by the system administrator.
-    login(form.first + ' ' + form.last, 'student')
+    setError('')
+    setBusy(true)
+    try {
+      const user = await apiSignup({
+        firstName: form.first.trim(),
+        lastName: form.last.trim(),
+        studentNumber: form.id.trim(),
+        email: form.email.trim(),
+        block: form.block,
+        room: form.room.trim(),
+        password: form.password,
+      })
+      login(user.name, user.role, user.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign up failed.')
+      setBusy(false)
+    }
   }
 
   return (
@@ -72,15 +94,16 @@ export function Signup() {
           </div>
           <div className="field">
             <label>Password</label>
-            <input type="password" value={form.password} onChange={field('password')} required />
+            <input type="password" value={form.password} onChange={field('password')} minLength={8} required />
+            <div className="field-hint">At least 8 characters.</div>
           </div>
           <div className="field">
             <label>Confirm password</label>
             <input type="password" value={form.confirm} onChange={field('confirm')} required />
           </div>
           {error && <div className="field-error">{error}</div>}
-          <button className="btn btn-primary btn-block" type="submit" style={{ marginTop: 6 }}>
-            Create account
+          <button className="btn btn-primary btn-block" type="submit" style={{ marginTop: 6 }} disabled={busy}>
+            {busy ? 'Creating account…' : 'Create account'}
           </button>
         </form>
         <div className="auth-switch">

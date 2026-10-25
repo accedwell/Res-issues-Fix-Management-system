@@ -6,10 +6,8 @@ import type {
 export interface AppState {
   route: Route
   setRoute: (route: Route) => void
-  authRole: Role
-  setAuthRole: (role: Role) => void
   auth: Auth
-  login: (name: string, role: Role) => void
+  login: (name: string, role: Role, userId: string) => void
   logout: () => void
   tabs: Record<Role, string>
   setTab: (tab: string) => void

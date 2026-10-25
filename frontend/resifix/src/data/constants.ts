@@ -61,13 +61,6 @@ export const CATEGORY_SPECIALIZATION: Record<string, string> = {
 
 export const GENERAL_SPECIALIZATION = 'General Maintenance'
 
-export const AUTH_ROLES: { key: Role; label: string }[] = [
-  { key: 'student', label: 'Student' },
-  { key: 'admin', label: 'Residence Admin' },
-  { key: 'maintenance', label: 'Maintenance Staff' },
-  { key: 'sysadmin', label: 'System Admin' },
-]
-
 export const ROLE_NAMES: Record<Role, string> = {
   student: 'Student',
   admin: 'Residence Administrator',
@@ -112,12 +105,4 @@ export const DEFAULT_TABS: Record<Role, string> = {
   admin: 'overview',
   maintenance: 'assigned',
   sysadmin: 'users',
-}
-
-// Demo account names used when logging in to each role.
-export const DEMO_NAMES: Record<Role, string> = {
-  student: 'Naledi Mahlangu',
-  admin: 'Palesa Mokgadi',
-  maintenance: 'Thabo Nkosi',
-  sysadmin: 'System Administrator',
 }
