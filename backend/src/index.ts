@@ -1,6 +1,8 @@
+
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
+import prisma from "./lib/prisma.js";
 import { errorHandler } from "./lib/http.js";
 import { authRouter } from "./routes/auth.js";
 import { categoriesRouter } from "./routes/categories.js";
@@ -23,6 +25,24 @@ app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/api/health/db", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+
+    res.json({
+      status: "ok",
+      database: "connected",
+    });
+  } catch (error) {
+    console.error("Database health check failed:", error);
+
+    res.status(503).json({
+      status: "error",
+      database: "disconnected",
+    });
+  }
 });
 
 app.use("/api/auth", authRouter);
