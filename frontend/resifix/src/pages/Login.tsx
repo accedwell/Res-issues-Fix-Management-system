@@ -46,18 +46,22 @@ export function Login() {
             Log in
           </button>
         </form>
-        <div className="auth-switch">
-          Don’t have an account?{' '}
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault()
-              setRoute('signup')
-            }}
-          >
-            Sign up
-          </a>
-        </div>
+        {isStudent ? (
+          <div className="auth-switch">
+            Don’t have an account?{' '}
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault()
+                setRoute('signup')
+              }}
+            >
+              Sign up
+            </a>
+          </div>
+        ) : (
+          <div className="auth-switch">Staff accounts are created by the system administrator.</div>
+        )}
         <a
           className="back-home-link"
           href="#"

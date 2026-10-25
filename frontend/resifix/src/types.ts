@@ -113,3 +113,4 @@ export type Modal =
   | { type: 'removeUser'; userId: string }
   | { type: 'addCategory' }
   | { type: 'editCategory'; categoryKey: string }
+  | { type: 'removeCategory'; categoryKey: string }

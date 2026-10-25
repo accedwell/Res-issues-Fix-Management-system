@@ -32,6 +32,7 @@ export interface AppState {
   removeUser: (userId: string) => void
   addCategory: (name: string, icon: string) => void
   editCategory: (key: string, name: string, icon: string) => void
+  removeCategory: (key: string) => void
   toggleSetting: (key: string) => void
   markNotificationsRead: (studentId: string) => void
   catInfo: (key: string) => Category

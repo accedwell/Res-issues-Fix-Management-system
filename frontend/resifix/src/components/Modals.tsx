@@ -2,7 +2,7 @@ import { useState, type ChangeEvent } from 'react'
 import { Icon } from './Icon'
 import { useApp } from '../context/appContext'
 import { CATEGORY_ICONS, PRIORITIES, PRIORITY_CLASS, STAFF, STATUS_CLASS, USER_ROLES } from '../data/constants'
-import { formatDate } from '../utils'
+import { canReportNotFixed, formatDate, openJobCount, recommendStaff } from '../utils'
 import type { Category, Issue, Priority, Status } from '../types'
 
 export function ModalHost() {
@@ -25,6 +25,9 @@ export function ModalHost() {
       break
     case 'editCategory':
       content = <EditCategoryModal categoryKey={modal.categoryKey} close={close} />
+      break
+    case 'removeCategory':
+      content = <RemoveCategoryModal categoryKey={modal.categoryKey} close={close} />
       break
     default:
       if (!issue) return null
@@ -55,9 +58,10 @@ interface IssueModalProps {
 }
 
 function DetailModal({ issue, close }: IssueModalProps) {
-  const { catInfo } = useApp()
+  const { catInfo, auth, setModal } = useApp()
   const category = catInfo(issue.category)
   const staff = STAFF.find((s) => s.id === issue.assignedTo)
+  const studentCanReopen = auth.role === 'student' && issue.studentId === auth.studentId && canReportNotFixed(issue)
 
   return (
     <div className="modal">
@@ -132,6 +136,11 @@ function DetailModal({ issue, close }: IssueModalProps) {
         </div>
       )}
       <div className="modal-actions">
+        {studentCanReopen && (
+          <button className="btn btn-ghost" onClick={() => setModal({ type: 'notfixed', issueId: issue.id })}>
+            <Icon name="refresh" /> Still not fixed
+          </button>
+        )}
         <button className="btn btn-ghost" onClick={close}>
           Close
         </button>
@@ -141,8 +150,9 @@ function DetailModal({ issue, close }: IssueModalProps) {
 }
 
 function AssignModal({ issue, close }: IssueModalProps) {
-  const { assignIssue } = useApp()
-  const [staffId, setStaffId] = useState(issue.assignedTo || STAFF[0].id)
+  const { assignIssue, issues, catInfo } = useApp()
+  const recommended = recommendStaff(issue, issues)
+  const [staffId, setStaffId] = useState(issue.assignedTo || recommended.id)
   const [priority, setPriority] = useState<Priority>(issue.priority)
 
   return (
@@ -151,12 +161,29 @@ function AssignModal({ issue, close }: IssueModalProps) {
       <p className="modal-sub">
         {issue.ref} — {issue.title}
       </p>
+      <div className="auto-match">
+        <Icon name="check-circle" />
+        <div>
+          <b>
+            Auto-matched: {recommended.name} ({recommended.specialization})
+          </b>
+          <span>
+            Best fit for {catInfo(issue.category).name} issues · {openJobCount(recommended.id, issues)} open job(s)
+          </span>
+        </div>
+        {staffId !== recommended.id && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setStaffId(recommended.id)}>
+            Use
+          </button>
+        )}
+      </div>
       <div className="field">
         <label>Maintenance staff</label>
         <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
           {STAFF.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name} — {s.specialization}
+              {s.id === recommended.id ? '★ ' : ''}
+              {s.name} — {s.specialization} ({openJobCount(s.id, issues)} open)
             </option>
           ))}
         </select>
@@ -380,8 +407,36 @@ function RemoveUserModal({ userId, close }: { userId: string; close: () => void 
         <button className="btn btn-ghost" onClick={close}>
           Cancel
         </button>
-        <button className="btn btn-primary" style={{ background: 'var(--bad)' }} onClick={() => removeUser(userId)}>
+        <button className="btn btn-danger" onClick={() => removeUser(userId)}>
           <Icon name="x" /> Remove user
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function RemoveCategoryModal({ categoryKey, close }: { categoryKey: string; close: () => void }) {
+  const { catInfo, issues, removeCategory } = useApp()
+  const category = catInfo(categoryKey)
+  const affected = issues.filter((i) => i.category === categoryKey).length
+
+  return (
+    <div className="modal">
+      <h3>Remove category</h3>
+      <p className="modal-sub">
+        Remove the “{category.name}” category? Students will no longer be able to choose it.
+      </p>
+      {affected > 0 && (
+        <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+          {affected} existing report(s) in this category will be moved to “Other”.
+        </p>
+      )}
+      <div className="modal-actions">
+        <button className="btn btn-ghost" onClick={close}>
+          Cancel
+        </button>
+        <button className="btn btn-danger" onClick={() => removeCategory(categoryKey)}>
+          <Icon name="x" /> Remove category
         </button>
       </div>
     </div>

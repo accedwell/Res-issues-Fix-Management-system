@@ -1,15 +1,14 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
-import { AuthBrand, RolePicker } from './AuthParts'
+import { AuthBrand } from './AuthParts'
 import { useApp } from '../context/appContext'
 import { BLOCKS } from '../data/constants'
 
 export function Signup() {
-  const { authRole, setRoute, login } = useApp()
+  const { setRoute, login } = useApp()
   const [form, setForm] = useState({
     first: '', last: '', id: '', email: '', block: BLOCKS[0], room: '', password: '', confirm: '',
   })
   const [error, setError] = useState('')
-  const isStudent = authRole === 'student'
 
   const field = (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm({ ...form, [key]: e.target.value })
@@ -20,16 +19,16 @@ export function Signup() {
       setError('Passwords do not match.')
       return
     }
-    login(form.first + ' ' + form.last, authRole)
+    // Only students register themselves; staff accounts are created by the system administrator.
+    login(form.first + ' ' + form.last, 'student')
   }
 
   return (
     <div className="auth-shell">
       <div className="auth-card">
         <AuthBrand onClick={() => setRoute('landing')} />
-        <div className="auth-title">Create your account</div>
-        <p className="auth-sub">Join ResiFix to start reporting and tracking issues.</p>
-        <RolePicker />
+        <div className="auth-title">Create your student account</div>
+        <p className="auth-sub">Join ResiFix to start reporting and tracking residence issues.</p>
         <form onSubmit={submit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div className="field">
@@ -42,12 +41,12 @@ export function Signup() {
             </div>
           </div>
           <div className="field">
-            <label>{isStudent ? 'Student number' : 'Staff / Admin ID'}</label>
+            <label>Student number</label>
             <input
               type="text"
               value={form.id}
               onChange={field('id')}
-              placeholder={isStudent ? 'e.g. 22045678' : 'e.g. STF-1042'}
+              placeholder="e.g. 22045678"
               required
             />
           </div>
@@ -55,24 +54,22 @@ export function Signup() {
             <label>Email address</label>
             <input type="email" value={form.email} onChange={field('email')} placeholder="you@campus.ac.za" required />
           </div>
-          {isStudent && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div className="field">
-                <label>Block</label>
-                <select value={form.block} onChange={field('block')} required>
-                  {BLOCKS.map((block) => (
-                    <option key={block} value={block}>
-                      {block}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>Room number</label>
-                <input type="text" value={form.room} onChange={field('room')} placeholder="e.g. 204" required />
-              </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="field">
+              <label>Block</label>
+              <select value={form.block} onChange={field('block')} required>
+                {BLOCKS.map((block) => (
+                  <option key={block} value={block}>
+                    {block}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
+            <div className="field">
+              <label>Room number</label>
+              <input type="text" value={form.room} onChange={field('room')} placeholder="e.g. 204" required />
+            </div>
+          </div>
           <div className="field">
             <label>Password</label>
             <input type="password" value={form.password} onChange={field('password')} required />

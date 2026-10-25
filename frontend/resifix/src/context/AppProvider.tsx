@@ -126,7 +126,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     reportNotFixed: (issue, reason) => {
       updateIssue(issue.id, (i) =>
-        withStatus({ ...i, reopened: (i.reopened || 0) + 1 }, 'In Progress', 'Student reported the issue is NOT fixed: ' + reason),
+        // Clear any earlier feedback so the student can rate the new fix.
+        withStatus({ ...i, reopened: (i.reopened || 0) + 1, feedback: null }, 'In Progress', 'Student reported the issue is NOT fixed: ' + reason),
       )
       notify(issue.studentId, issue.ref + ' was re-opened and sent back to maintenance.')
       showToast('Issue re-opened — maintenance has been notified.')
@@ -137,7 +138,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setModal(null)
     },
     removeUser: (userId) => {
+      const name = users.find((u) => u.id === userId)?.name ?? 'User'
       setUsers((prev) => prev.filter((u) => u.id !== userId))
+      showToast(name + ' has been removed.')
       setModal(null)
     },
     addCategory: (name, icon) => {
@@ -149,6 +152,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     editCategory: (key, name, icon) => {
       setCategories((prev) => prev.map((c) => (c.key === key ? { ...c, name, icon } : c)))
+      setModal(null)
+    },
+    removeCategory: (key) => {
+      // "Other" is the fallback category, so it can't be removed.
+      if (key === 'other') return
+      const name = categories.find((c) => c.key === key)?.name ?? 'Category'
+      setCategories((prev) => prev.filter((c) => c.key !== key))
+      // Existing reports in this category move to "Other" so none are lost.
+      setIssues((prev) => prev.map((i) => (i.category === key ? { ...i, category: 'other' } : i)))
+      showToast(name + ' category removed.')
       setModal(null)
     },
     toggleSetting: (key) => setSettings((prev) => prev.map((s) => (s.key === key ? { ...s, on: !s.on } : s))),

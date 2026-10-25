@@ -35,7 +35,7 @@ function Users() {
               <td>{user.email}</td>
               <td>{user.extra}</td>
               <td>
-                <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'removeUser', userId: user.id })}>
+                <button className="btn btn-danger-ghost btn-sm" onClick={() => setModal({ type: 'removeUser', userId: user.id })}>
                   <Icon name="x" /> Remove
                 </button>
               </td>
@@ -65,9 +65,23 @@ function Categories() {
               <Icon name={c.icon} />
               {c.name}
             </span>
-            <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'editCategory', categoryKey: c.key })}>
-              Edit
-            </button>
+            <span style={{ display: 'inline-flex', gap: 6 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'editCategory', categoryKey: c.key })}>
+                Edit
+              </button>
+              {c.key === 'other' ? (
+                <span className="field-hint" style={{ alignSelf: 'center' }}>
+                  Default — can’t remove
+                </span>
+              ) : (
+                <button
+                  className="btn btn-danger-ghost btn-sm"
+                  onClick={() => setModal({ type: 'removeCategory', categoryKey: c.key })}
+                >
+                  <Icon name="x" /> Remove
+                </button>
+              )}
+            </span>
           </li>
         ))}
       </ul>

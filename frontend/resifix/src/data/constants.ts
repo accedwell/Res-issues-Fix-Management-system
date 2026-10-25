@@ -50,6 +50,17 @@ export const STAFF: Staff[] = [
   { id: 'stf-4', name: 'Ayanda Khumalo', specialization: 'IT / Wi-Fi' },
 ]
 
+// Which staff specialization handles each issue category. Anything not listed goes to general maintenance.
+export const CATEGORY_SPECIALIZATION: Record<string, string> = {
+  plumbing: 'Plumbing',
+  water: 'Plumbing',
+  electrical: 'Electrical',
+  lighting: 'Electrical',
+  wifi: 'IT / Wi-Fi',
+}
+
+export const GENERAL_SPECIALIZATION = 'General Maintenance'
+
 export const AUTH_ROLES: { key: Role; label: string }[] = [
   { key: 'student', label: 'Student' },
   { key: 'admin', label: 'Residence Admin' },

@@ -3,7 +3,7 @@ import { EmptyState, IssueRow, StatRow } from '../components/common'
 import { Icon } from '../components/Icon'
 import { useApp } from '../context/appContext'
 import { BLOCKS, PRIORITIES } from '../data/constants'
-import { formatDate, isOpen, stop } from '../utils'
+import { canReportNotFixed, formatDate, isOpen, stop } from '../utils'
 import type { Priority } from '../types'
 
 export function StudentDashboard({ tab }: { tab: string }) {
@@ -204,6 +204,13 @@ function MyReports() {
                     Confirm
                   </button>
                 </span>
+              ) : canReportNotFixed(issue) ? (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={stop(() => setModal({ type: 'notfixed', issueId: issue.id }))}
+                >
+                  Still not fixed?
+                </button>
               ) : undefined
             }
           />

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from './Icon'
 import { useApp } from '../context/appContext'
 import { PRIORITY_CLASS, STATUS_CLASS } from '../data/constants'
@@ -17,9 +17,9 @@ export function StatRow({ items }: { items: StatItem[] }) {
   return (
     <div className="stat-row">
       {items.map((item) => (
-        <div className="stat-tile" key={item.label}>
+        <div className="stat-tile" key={item.label} style={{ '--accent': item.fg } as CSSProperties}>
           <div className="top">
-            <div className="icon-badge" style={{ background: item.bg, color: item.fg }}>
+            <div className="icon-badge">
               <Icon name={item.icon} />
             </div>
           </div>
@@ -54,7 +54,10 @@ export function IssueRow({ issue, extra }: { issue: Issue; extra?: ReactNode }) 
       </div>
       <div className="issue-main">
         <div className="ref">{issue.ref}</div>
-        <div className="title">{issue.title}</div>
+        <div className="title">
+          {issue.title}
+          {issue.reopened ? <span className="reopened-tag">Re-opened {issue.reopened}×</span> : null}
+        </div>
         <div className="meta">
           {issue.residence} · Room {issue.room} · {formatDate(issue.dateReported)}
         </div>
