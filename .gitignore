@@ -1,0 +1,5 @@
+# Environment files hold passwords and secrets — never commit them anywhere in the repo.
+# Only the .env.example templates are tracked.
+.env
+.env.*
+!.env.example
