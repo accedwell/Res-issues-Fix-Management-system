@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -12,10 +11,12 @@ enum UserRole {
   STUDENT
   MAINTENANCE
   ADMIN
+  SYSADMIN
 }
 
 enum IssueStatus {
   REPORTED
+  RECEIVED
   ASSIGNED
   IN_PROGRESS
   ON_HOLD
@@ -52,25 +53,28 @@ enum HistoryAction {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  fullName     String   @map("full_name")
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  studentNumber String? @unique @map("student_number")
-  phone        String?
-  role         UserRole @default(STUDENT)
-  blockId      String?  @map("block_id")
-  roomNumber   String?  @map("room_number")
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  fullName       String   @map("full_name")
+  email          String   @unique
+  passwordHash   String   @map("password_hash")
+  studentNumber  String?  @unique @map("student_number")
+  phone          String?
+  role           UserRole @default(STUDENT)
+  blockId        String?  @map("block_id")
+  roomNumber     String?  @map("room_number")
+  // Maintenance staff only: the kind of job they handle (Plumbing, Electrical, ...).
+  specialization String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  block         ResidenceBlock? @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  block          ResidenceBlock?    @relation(fields: [blockId], references: [id], onDelete: SetNull)
   reportedIssues MaintenanceIssue[] @relation("ReportedIssues")
   assignedIssues MaintenanceIssue[] @relation("AssignedIssues")
-  notifications Notification[]
+  notifications  Notification[]
   historyEntries IssueHistory[]
-  feedback      IssueFeedback[]
+  feedback       IssueFeedback[]
+  passwordReset  PasswordReset?
 
   @@index([role])
   @@index([blockId])
@@ -94,6 +98,7 @@ model IssueCategory {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
+  icon        String   @default("dots")
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
 
@@ -110,27 +115,30 @@ model MaintenanceIssue {
   status      IssueStatus   @default(REPORTED)
   priority    IssuePriority @default(MEDIUM)
 
-  reporterId  String @map("reporter_id")
+  reporterId  String  @map("reporter_id")
   assigneeId  String? @map("assignee_id")
-  categoryId  String @map("category_id")
-  blockId     String @map("block_id")
+  categoryId  String  @map("category_id")
+  blockId     String  @map("block_id")
   roomNumber  String? @map("room_number")
   location    String?
   imageUrl    String? @map("image_url")
+  hasPhoto    Boolean @default(false) @map("has_photo")
+  // How many times the student said it was not fixed.
+  reopenCount Int     @default(0) @map("reopen_count")
 
-  reportedAt  DateTime  @default(now()) @map("reported_at")
-  assignedAt  DateTime? @map("assigned_at")
-  startedAt   DateTime? @map("started_at")
-  resolvedAt  DateTime? @map("resolved_at")
-  closedAt    DateTime? @map("closed_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  reportedAt DateTime  @default(now()) @map("reported_at")
+  assignedAt DateTime? @map("assigned_at")
+  startedAt  DateTime? @map("started_at")
+  resolvedAt DateTime? @map("resolved_at")
+  closedAt   DateTime? @map("closed_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  reporter  User          @relation("ReportedIssues", fields: [reporterId], references: [id], onDelete: Restrict)
-  assignee  User?         @relation("AssignedIssues", fields: [assigneeId], references: [id], onDelete: SetNull)
-  category  IssueCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  block     ResidenceBlock @relation(fields: [blockId], references: [id], onDelete: Restrict)
-  history   IssueHistory[]
-  feedback  IssueFeedback?
+  reporter User           @relation("ReportedIssues", fields: [reporterId], references: [id], onDelete: Restrict)
+  assignee User?          @relation("AssignedIssues", fields: [assigneeId], references: [id], onDelete: SetNull)
+  category IssueCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  block    ResidenceBlock @relation(fields: [blockId], references: [id], onDelete: Restrict)
+  history  IssueHistory[]
+  feedback IssueFeedback?
 
   @@index([status])
   @@index([priority])
@@ -201,4 +209,18 @@ model SystemSetting {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("system_settings")
+}
+
+// A pending "forgot password" request. Only a hash of the 6-digit code is stored.
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  codeHash  String   @map("code_hash")
+  expiresAt DateTime @map("expires_at")
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
 }

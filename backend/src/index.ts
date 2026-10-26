@@ -11,7 +11,6 @@ import { issuesRouter } from "./routes/issues.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { settingsRouter } from "./routes/settings.js";
 import { usersRouter } from "./routes/users.js";
-import { DATA_FILE, db } from "./store/db.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -69,10 +68,8 @@ app.use("/api", (_req, res) => {
 
 app.use(errorHandler);
 
-db(); // Load (or create) the data file before taking requests.
-
 // Listens on every network interface, so other devices on the same Wi-Fi can connect.
 app.listen(Number(PORT), "0.0.0.0", () => {
   console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Data file: ${DATA_FILE}`);
+  console.log("Data is stored in PostgreSQL (DATABASE_URL in .env).");
 });
