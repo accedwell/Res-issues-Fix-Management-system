@@ -19,7 +19,7 @@ const DASHBOARDS = {
 }
 
 export function AppShell() {
-  const { auth, tabs, setTab, logout, toast, live } = useApp()
+  const { auth, tabs, setTab, logout, toast, live, ready } = useApp()
   const [menuOpen, setMenuOpen] = useState(false)
   const role = auth.role as Role
   const tab = tabs[role]
@@ -105,7 +105,7 @@ export function AppShell() {
             </div>
           </div>
           <div className="content">
-            <Dashboard tab={tab} />
+            {ready ? <Dashboard tab={tab} /> : <div className="app-loading">Loading your dashboard…</div>}
           </div>
         </div>
       </div>

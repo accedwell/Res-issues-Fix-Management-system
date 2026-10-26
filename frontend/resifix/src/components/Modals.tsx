@@ -5,7 +5,7 @@ import { PasswordInput } from './PasswordInput'
 import {
   BLOCKS, CATEGORY_ICONS, GENERAL_SPECIALIZATION, PRIORITIES, PRIORITY_CLASS, ROLE_NAMES, SPECIALIZATIONS, STATUS_CLASS,
 } from '../data/constants'
-import { canReportNotFixed, formatDate, recommendStaff } from '../utils'
+import { canReportNotFixed, formatDate, isOpen, recommendStaff } from '../utils'
 import type { Category, Issue, Priority, Role, Status } from '../types'
 
 export function ModalHost() {
@@ -61,7 +61,9 @@ interface IssueModalProps {
 }
 
 function DetailModal({ issue, close }: IssueModalProps) {
-  const { catInfo, auth, setModal, staff: staffList } = useApp()
+  const { catInfo, auth, setModal, staff: staffList, receiveIssue } = useApp()
+  const [busy, setBusy] = useState(false)
+  const isAdmin = auth.role === 'admin'
   const category = catInfo(issue.category)
   const assignedName = issue.assignedToName ?? staffList.find((s) => s.id === issue.assignedTo)?.name
   const studentCanReopen = auth.role === 'student' && issue.studentId === auth.studentId && canReportNotFixed(issue)
@@ -139,6 +141,23 @@ function DetailModal({ issue, close }: IssueModalProps) {
         </div>
       )}
       <div className="modal-actions">
+        {isAdmin && issue.status === 'Submitted' && (
+          <button
+            className="btn btn-ghost"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              if (!(await receiveIssue(issue))) setBusy(false)
+            }}
+          >
+            <Icon name="check" /> {busy ? 'Saving…' : 'Mark as received'}
+          </button>
+        )}
+        {isAdmin && isOpen(issue) && (
+          <button className="btn btn-primary" onClick={() => setModal({ type: 'assign', issueId: issue.id })}>
+            {issue.assignedTo ? 'Reassign' : 'Assign'}
+          </button>
+        )}
         {studentCanReopen && (
           <button className="btn btn-ghost" onClick={() => setModal({ type: 'notfixed', issueId: issue.id })}>
             <Icon name="refresh" /> Still not fixed

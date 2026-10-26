@@ -107,7 +107,12 @@ export const ISSUE_VIEWS = [
   { key: 'open', label: 'Currently open' },
   { key: 'unassigned', label: 'Awaiting assignment' },
   { key: 'urgent', label: 'Urgent & open' },
+  { key: 'overdue', label: 'Overdue' },
+  { key: 'reopened', label: 'Re-opened' },
   { key: 'done', label: 'Resolved / closed' },
 ]
 
-export const DEFAULT_FILTERS: Filters = { view: 'all', status: 'all', category: 'all', residence: 'all', search: '' }
+// How many days an open issue may take, by priority, before it counts as overdue.
+export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 1, High: 3, Normal: 7, Low: 14 }
+
+export const DEFAULT_FILTERS: Filters = { view: 'all', status: 'all', category: 'all', residence: 'all', assignee: 'all', room: '', search: '' }

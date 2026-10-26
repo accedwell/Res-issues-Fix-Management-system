@@ -40,6 +40,7 @@ function toIssue(row: IssueRow): Issue {
       status: (h.newValue as Status) ?? "Submitted",
       date: toDay(h.createdAt),
       note: h.comment ?? "",
+      at: h.createdAt.toISOString(),
     })),
     feedback: row.feedback ? { rating: row.feedback.rating, comment: row.feedback.comment ?? "" } : null,
     reopened: row.reopenCount,

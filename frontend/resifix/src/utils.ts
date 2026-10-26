@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import { CATEGORY_SPECIALIZATION, DONE_STATUSES, GENERAL_SPECIALIZATION } from './data/constants'
+import { CATEGORY_SPECIALIZATION, DONE_STATUSES, GENERAL_SPECIALIZATION, OVERDUE_AFTER_DAYS } from './data/constants'
 import type { AppNotification, Auth, Issue, Staff } from './types'
 
 export const formatDate = (date: string) =>
@@ -13,6 +13,15 @@ export const stop = (action: () => void) => (e: MouseEvent) => {
 
 export const isOpen = (issue: Issue) => !DONE_STATUSES.includes(issue.status)
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// Whole days since the issue was reported (dates are YYYY-MM-DD, counted in UTC like the server).
+export const daysOpen = (issue: Issue) =>
+  Math.max(0, Math.floor((Date.parse(new Date().toISOString().slice(0, 10)) - Date.parse(issue.dateReported)) / DAY_MS))
+
+// Still open after the time allowed for its priority.
+export const isOverdue = (issue: Issue) => isOpen(issue) && daysOpen(issue) > OVERDUE_AFTER_DAYS[issue.priority]
+
 // Whether a notification is meant for the logged-in user.
 export const isForUser = (n: AppNotification, auth: Auth) =>
   (!!n.userId && n.userId === auth.userId) || (!!n.role && n.role === auth.role)
@@ -22,6 +31,8 @@ export function matchesView(issue: Issue, view: string): boolean {
   if (view === 'open') return isOpen(issue)
   if (view === 'unassigned') return isOpen(issue) && !issue.assignedTo
   if (view === 'urgent') return isOpen(issue) && issue.priority === 'Urgent'
+  if (view === 'overdue') return isOverdue(issue)
+  if (view === 'reopened') return (issue.reopened ?? 0) > 0
   if (view === 'done') return !isOpen(issue)
   return true
 }
@@ -38,6 +49,17 @@ export function recommendStaff(issue: Issue, staff: Staff[]): Staff | undefined 
   const pool = matching.length ? matching : general.length ? general : staff
   return pool.reduce<Staff | undefined>((best, s) => (!best || s.openJobs < best.openJobs ? s : best), undefined)
 }
+
+const NOT_FIXED_NOTE = 'Student reported the issue is NOT fixed: '
+
+// The most recent time a student sent the issue back, with their reason.
+export function lastReopen(issue: Issue): { date: string; reason: string } | undefined {
+  const entry = [...issue.history].reverse().find((h) => h.note.startsWith(NOT_FIXED_NOTE))
+  return entry ? { date: entry.date, reason: entry.note.slice(NOT_FIXED_NOTE.length) } : undefined
+}
+
+// Rooms are typed by students, so compare them ignoring case and extra spaces.
+export const sameRoom = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 export const initials = (name: string) =>
   name

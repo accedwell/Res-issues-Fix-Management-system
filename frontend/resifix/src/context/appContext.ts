@@ -10,6 +10,8 @@ export interface AppState {
   auth: Auth
   // True while a saved login is being checked after the page loads.
   restoring: boolean
+  // False until the first load of data after logging in has finished.
+  ready: boolean
   // Whether the live-update connection to the server is open.
   live: boolean
   login: (name: string, role: Role, userId: string) => void
@@ -29,6 +31,7 @@ export interface AppState {
   setFilters: (filters: Filters) => void
   // The actions below save to the server; each resolves to true when it worked.
   addIssue: (issue: NewIssue) => Promise<boolean>
+  receiveIssue: (issue: Issue) => Promise<boolean>
   assignIssue: (issue: Issue, staffId: string, priority: Priority) => Promise<boolean>
   updateProgress: (issue: Issue, status: Status, note: string) => Promise<boolean>
   confirmResolution: (issue: Issue, rating: number, comment: string) => Promise<boolean>

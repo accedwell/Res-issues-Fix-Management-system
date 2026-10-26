@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from './Icon'
 import { useApp } from '../context/appContext'
 import { PRIORITY_CLASS, STATUS_CLASS } from '../data/constants'
-import { formatDate } from '../utils'
+import { daysOpen, formatDate, isOverdue } from '../utils'
 import type { Issue } from '../types'
 
 export interface StatItem {
@@ -70,8 +70,10 @@ export function EmptyState({ icon, title, sub }: { icon: string; title: string; 
 }
 
 export function IssueRow({ issue, extra }: { issue: Issue; extra?: ReactNode }) {
-  const { catInfo, setModal } = useApp()
+  const { catInfo, setModal, auth } = useApp()
   const category = catInfo(issue.category)
+  // Staff see how long an issue has gone past its time limit; students don't need this.
+  const showOverdue = auth.role !== 'student' && isOverdue(issue)
 
   return (
     <div className="issue-row" onClick={() => setModal({ type: 'detail', issueId: issue.id })}>
@@ -83,6 +85,7 @@ export function IssueRow({ issue, extra }: { issue: Issue; extra?: ReactNode }) 
         <div className="title">
           {issue.title}
           {issue.reopened ? <span className="reopened-tag">Re-opened {issue.reopened}×</span> : null}
+          {showOverdue && <span className="overdue-tag">Overdue · {daysOpen(issue)} days</span>}
         </div>
         <div className="meta">
           {issue.residence} · Room {issue.room} · {formatDate(issue.dateReported)}

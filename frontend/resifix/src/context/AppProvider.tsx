@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppContext, type AppState } from './appContext'
 import {
-  apiAddCategory, apiAddUser, apiAssignIssue, apiConfirmResolution, apiCreateIssue, apiEditCategory, apiMe,
+  apiAddCategory, apiAddUser, apiAssignIssue, apiReceiveIssue, apiConfirmResolution, apiCreateIssue, apiEditCategory, apiMe,
   apiReadAllNotifications, apiReadNotification, apiRemoveCategory, apiRemoveUser, apiReportNotFixed, apiSetSetting,
   apiUpdateProgress, clearToken, connectLiveUpdates, fetchCategories, fetchIssues, fetchNotifications, fetchSettings,
   fetchStaff, fetchUsers, getToken, type ApiUser, type Topic,
@@ -41,6 +41,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<Auth>(LOGGED_OUT)
   const [restoring, setRestoring] = useState(() => !!getToken())
   const [live, setLive] = useState(false)
+  const [ready, setReady] = useState(false)
   const [tabs, setTabs] = useState<Record<Role, string>>({ ...DEFAULT_TABS })
   const [modal, setModal] = useState<Modal | null>(null)
   const [toast, setToast] = useState<{ msg: string; id: number } | null>(null)
@@ -111,7 +112,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAuth({ loggedIn: true, role, name, userId, studentId: role === 'student' ? userId : null })
       setTabs({ ...DEFAULT_TABS })
       setFilters(DEFAULT_FILTERS)
+      setReady(false)
       await refresh(TOPICS_FOR_ROLE[role])
+      setReady(true)
       if (!welcome) return
       try {
         const unread = (await fetchNotifications()).filter((n) => !n.read).length
@@ -174,6 +177,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRoute,
     auth,
     restoring,
+    ready,
     live,
     login: (name, role, userId) => void startSession(name, role, userId, true),
     logout: endSession,
@@ -202,6 +206,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return false
       }
     },
+    receiveIssue: (issue) =>
+      save(() => apiReceiveIssue(issue.id), ISSUE_TOPICS, `${issue.ref} marked as received — the student can see it has been seen.`),
     assignIssue: (issue, staffId, priority) =>
       save(
         () => apiAssignIssue(issue.id, staffId, priority),

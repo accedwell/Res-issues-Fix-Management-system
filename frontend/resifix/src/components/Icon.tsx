@@ -2,6 +2,12 @@ import type { ReactNode } from 'react'
 
 // Line icons (Feather / Lucide style), drawn with the current text colour.
 const ICONS: Record<string, ReactNode> = {
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </>
+  ),
   eye: (
     <>
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />

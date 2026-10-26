@@ -557,3 +557,123 @@ table.simple tbody tr:hover td { background: rgba(77, 143, 240, .06); }
 @keyframes live-pulse { 50% { box-shadow: 0 0 0 6px rgba(34, 199, 169, 0); } }
 @media (max-width: 640px) { .live-status { display: none; } }
 .app-loading { min-height: 100vh; display: flex; align-items: center; justify-content: center; color: var(--ink-soft); font-size: 14px; font-weight: 600; }
+
+/* Overdue issues */
+/* Same soft style as the Urgent priority label, so it fits the other pills. */
+.overdue-tag { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 800; vertical-align: 2px; background: var(--bad-bg); color: var(--bad); box-shadow: inset 0 0 0 1px rgba(255, 122, 122, .35); }
+/* Five stat tiles fit on one row on wide screens. */
+@media (min-width: 1101px) { .stat-row:has(> :nth-child(5)) { grid-template-columns: repeat(5, 1fr); } }
+@media (min-width: 901px) and (max-width: 1100px) { .stat-row:has(> :nth-child(5)) { grid-template-columns: repeat(3, 1fr); } }
+
+/* Admin overview: needs attention + maintenance team side by side */
+.overview-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.overview-grid > .card { margin-bottom: 0; }
+.team-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.team-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border: 1px solid transparent; border-radius: 14px; background: var(--card); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.team-row:hover, .team-row:focus-visible { border-color: var(--border); box-shadow: inset 3px 0 0 var(--mint); outline: none; }
+.team-av { width: 38px; height: 38px; flex: 0 0 38px; border-radius: 12px; background: var(--royal); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
+.team-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.team-name { font-weight: 700; font-size: 13.5px; }
+.team-spec .overdue-tag { margin-left: 6px; vertical-align: 0; }
+.team-spec { font-size: 11.5px; color: var(--ink-soft); }
+.team-bar { display: block; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 4px; }
+.team-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--mint); transition: width .3s; }
+.team-count { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+.team-count b { font-size: 20px; color: #fff; }
+.team-count span { font-size: 11px; color: var(--ink-soft); }
+.team-count small { font-size: 10.5px; color: var(--ink-faint, var(--ink-soft)); margin-top: 3px; }
+.content .app-loading { min-height: 40vh; }
+
+/* Problem hotspots (admin reports) */
+.hotspot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+@media (max-width: 900px) { .hotspot-grid { grid-template-columns: 1fr; } }
+.hotspot-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--mint); margin: 0 0 10px; }
+.hotspot-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hotspot-row { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 11px 13px; border: 1px solid transparent; border-radius: 12px; background: var(--card); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.hotspot-row:hover:not(:disabled), .hotspot-row:focus-visible { border-color: var(--border); box-shadow: inset 3px 0 0 var(--mint); outline: none; }
+.hotspot-row:disabled { cursor: default; opacity: .55; }
+.hotspot-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13.5px; }
+.hotspot-head > span { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.hotspot-row .team-bar { margin-top: 0; }
+.hotspot-note { font-size: 11.5px; color: var(--ink-soft); }
+.repeat-count { font-weight: 800; color: var(--warn) !important; font-size: 13px !important; }
+.filter-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: -4px 0 14px; }
+.filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 11px; border-radius: 999px; background: rgba(34, 199, 169, .12); color: var(--mint-soft); font-size: 12px; font-weight: 700; }
+.filter-chip button { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.filter-chip button:hover { background: rgba(34, 199, 169, .2); }
+.filter-chip .icon-inline svg { width: 12px; height: 12px; }
+
+/* Re-opened fixes (admin reports) */
+.reopen-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.reopen-total { font-size: 13px; color: var(--ink-soft); margin-right: 6px; }
+.reopen-total b { color: var(--warn); font-size: 15px; }
+.reopen-staff { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--card); color: var(--ink-soft); }
+.reopen-staff b { color: var(--ink); }
+.reopen-reason { font-size: 13px; font-style: italic; color: var(--ink); }
+
+/* Student feedback (admin reports) */
+.feedback-grid { display: grid; grid-template-columns: minmax(240px, 1fr) 2fr; gap: 26px; }
+@media (max-width: 900px) { .feedback-grid { grid-template-columns: 1fr; } }
+.rating-big { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.rating-big > b { font-size: 40px; line-height: 1; color: #fff; letter-spacing: -.02em; }
+.rating-stars { display: inline-flex; gap: 3px; color: var(--border); }
+.rating-stars .on { color: var(--warn); }
+.rating-stars svg { width: 18px; height: 18px; fill: currentColor; }
+.star-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.star-bars li { display: grid; grid-template-columns: 28px 1fr 22px; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-soft); }
+.star-bars li > span:last-child { text-align: right; }
+.star-bars .team-bar { margin-top: 0; }
+.star-bars .team-bar > span { background: var(--warn); }
+.star-bars .team-bar > span.low { background: var(--bad); }
+.staff-rating { display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 10px; background: var(--card); font-size: 13px; }
+.staff-rating > span:last-child { color: var(--ink-soft); font-size: 12px; }
+.staff-rating b { color: var(--warn); }
+.staff-rating b.low { color: var(--bad); }
+.rating-pill { font-weight: 800; font-size: 12px !important; padding: 2px 8px; border-radius: 7px; background: var(--warn-bg); color: var(--warn) !important; }
+.rating-pill.low { background: var(--bad-bg); color: var(--bad) !important; box-shadow: inset 0 0 0 1px rgba(255, 122, 122, .35); }
+.hotspot-row.low-rating { box-shadow: inset 3px 0 0 var(--bad); }
+
+/* Reported vs. fixed trend chart (admin reports). Colours validated for colour-blind readers on the dark card. */
+.trend-card { --series-reported: #4d8ff0; --series-fixed: #14a58b; }
+.trend-num { font-variant-numeric: tabular-nums; color: var(--ink); }
+.trend-legend { display: flex; gap: 16px; margin: 0 0 14px; font-size: 12.5px; color: var(--ink-soft); }
+.trend-legend span, .trend-tip span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.swatch.reported { background: var(--series-reported); }
+.swatch.fixed { background: var(--series-fixed); }
+.trend-chart { padding-left: 26px; }
+.trend-plot { position: relative; height: 200px; }
+.trend-grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--border-soft, rgba(255, 255, 255, .06)); }
+.trend-grid span { position: absolute; left: -26px; top: -8px; width: 20px; text-align: right; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.trend-groups { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(8, 1fr); }
+.trend-group { position: relative; display: flex; align-items: flex-end; justify-content: center; height: 100%; border-radius: 8px; outline: none; cursor: default; }
+.trend-group.hover, .trend-group:focus-visible { background: rgba(255, 255, 255, .03); }
+.trend-group:focus-visible { box-shadow: inset 0 0 0 2px var(--mint); }
+.trend-bars { display: flex; align-items: flex-end; gap: 2px; height: 100%; }
+.trend-bar { position: relative; width: 18px; min-height: 0; border-radius: 4px 4px 0 0; transition: height .3s; }
+.trend-bar.reported { background: var(--series-reported); }
+.trend-bar.fixed { background: var(--series-fixed); }
+.trend-bar em { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 3px; font-style: normal; font-size: 11px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.trend-axis { display: grid; grid-template-columns: repeat(8, 1fr); margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+.trend-axis span { text-align: center; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+.trend-axis span:last-child { color: var(--ink); font-weight: 700; }
+.trend-tip { position: absolute; top: 4px; left: calc(50% + 26px); z-index: 5; display: flex; flex-direction: column; gap: 4px; padding: 9px 11px; border-radius: 10px; background: var(--navy-deep); border: 1px solid var(--border); box-shadow: 0 8px 20px rgba(0, 0, 0, .4); font-size: 12px; color: var(--ink); white-space: nowrap; pointer-events: none; }
+.trend-tip b { font-size: 12px; }
+/* Beside the hovered week, flipping to the left side for the last weeks. */
+.trend-group:nth-last-child(-n+2) .trend-tip { left: auto; right: calc(50% + 26px); }
+@media (max-width: 640px) { .trend-axis span { font-size: 9.5px; } .trend-bar { width: 10px; } }
+
+/* Recent activity feed (admin overview) */
+.activity-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.activity-list li + li { border-top: 1px solid var(--border-soft, rgba(255, 255, 255, .06)); }
+.activity-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 8px; border: none; border-radius: 10px; background: transparent; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.activity-row:hover, .activity-row:focus-visible { background: var(--card); outline: none; }
+.activity-icon { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.activity-icon::before { display: none; }
+.activity-icon.reopened { background: var(--bad-bg); color: var(--bad); }
+.activity-icon .icon-inline svg { width: 15px; height: 15px; }
+.activity-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.activity-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.activity-title b { color: var(--ink-soft); font-weight: 700; margin-right: 4px; }
+.activity-note { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.activity-time { flex: 0 0 auto; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }

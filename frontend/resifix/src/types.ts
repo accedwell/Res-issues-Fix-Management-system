@@ -30,6 +30,8 @@ export interface HistoryEntry {
   status: Status
   date: string
   note: string
+  // Exact time it happened, sent by the server (used to order the activity feed).
+  at?: string
 }
 
 export interface Feedback {
@@ -109,6 +111,10 @@ export interface Filters {
   status: string
   category: string
   residence: string
+  // A maintenance staff member id, to see one person's jobs.
+  assignee: string
+  // One exact room or location within the chosen block (from the hotspots report).
+  room: string
   search: string
 }
 

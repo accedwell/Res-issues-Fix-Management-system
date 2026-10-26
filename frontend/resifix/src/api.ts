@@ -122,6 +122,7 @@ export const fetchSettings = async () => (await request<{ settings: Setting[] }>
 // ===== Issues =====
 
 export const apiCreateIssue = async (issue: NewIssue) => (await request<{ issue: Issue }>('POST', '/issues', issue)).issue
+export const apiReceiveIssue = (id: string) => request('POST', `/issues/${id}/receive`)
 export const apiAssignIssue = (id: string, staffId: string, priority: Priority) =>
   request('POST', `/issues/${id}/assign`, { staffId, priority })
 export const apiUpdateProgress = (id: string, status: Status, note: string) =>

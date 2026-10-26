@@ -37,6 +37,8 @@ export interface HistoryEntry {
   status: Status;
   date: string;
   note: string;
+  // Exact time it happened (ISO). Sent to the app; not needed when adding a new entry.
+  at?: string;
 }
 
 export interface Feedback {
