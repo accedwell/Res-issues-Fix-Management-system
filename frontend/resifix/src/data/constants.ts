@@ -1,4 +1,4 @@
-import type { Category, NavItem, Priority, Role, Staff, Status } from '../types'
+import type { Category, Filters, NavItem, Priority, Role, Status } from '../types'
 
 export const CATEGORIES: Category[] = [
   { key: 'plumbing', name: 'Plumbing', icon: 'droplet' },
@@ -43,13 +43,6 @@ export const PRIORITY_CLASS: Record<Priority, string> = {
 
 export const DONE_STATUSES: Status[] = ['Resolved', 'Closed']
 
-export const STAFF: Staff[] = [
-  { id: 'stf-1', name: 'Thabo Nkosi', specialization: 'Plumbing' },
-  { id: 'stf-2', name: 'Lindiwe Mokoena', specialization: 'Electrical' },
-  { id: 'stf-3', name: 'Sipho Dlamini', specialization: 'General Maintenance' },
-  { id: 'stf-4', name: 'Ayanda Khumalo', specialization: 'IT / Wi-Fi' },
-]
-
 // Which staff specialization handles each issue category. Anything not listed goes to general maintenance.
 export const CATEGORY_SPECIALIZATION: Record<string, string> = {
   plumbing: 'Plumbing',
@@ -61,14 +54,15 @@ export const CATEGORY_SPECIALIZATION: Record<string, string> = {
 
 export const GENERAL_SPECIALIZATION = 'General Maintenance'
 
+// Jobs a maintenance staff member can be set up for.
+export const SPECIALIZATIONS = ['Plumbing', 'Electrical', 'IT / Wi-Fi', GENERAL_SPECIALIZATION]
+
 export const ROLE_NAMES: Record<Role, string> = {
   student: 'Student',
   admin: 'Residence Administrator',
   maintenance: 'Maintenance Staff',
   sysadmin: 'System Administrator',
 }
-
-export const USER_ROLES = ['Student', 'Residence Administrator', 'Maintenance Staff', 'System Administrator']
 
 export const NAV: Record<Role, NavItem[]> = {
   student: [
@@ -106,3 +100,14 @@ export const DEFAULT_TABS: Record<Role, string> = {
   maintenance: 'assigned',
   sysadmin: 'users',
 }
+
+// Quick views of the issue list. The dashboard stat tiles open the list on one of these.
+export const ISSUE_VIEWS = [
+  { key: 'all', label: 'All issues' },
+  { key: 'open', label: 'Currently open' },
+  { key: 'unassigned', label: 'Awaiting assignment' },
+  { key: 'urgent', label: 'Urgent & open' },
+  { key: 'done', label: 'Resolved / closed' },
+]
+
+export const DEFAULT_FILTERS: Filters = { view: 'all', status: 'all', category: 'all', residence: 'all', search: '' }

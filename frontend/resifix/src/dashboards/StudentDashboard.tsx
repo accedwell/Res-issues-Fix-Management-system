@@ -2,8 +2,8 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { EmptyState, IssueRow, StatRow } from '../components/common'
 import { Icon } from '../components/Icon'
 import { useApp } from '../context/appContext'
-import { BLOCKS, PRIORITIES } from '../data/constants'
-import { canReportNotFixed, formatDate, isOpen, stop } from '../utils'
+import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, PRIORITIES } from '../data/constants'
+import { canReportNotFixed, formatDate, isForUser, isOpen, matchesView, stop } from '../utils'
 import type { Priority } from '../types'
 
 export function StudentDashboard({ tab }: { tab: string }) {
@@ -18,20 +18,32 @@ function useMyIssues() {
   return issues.filter((issue) => issue.studentId === auth.studentId)
 }
 
+// Opens My Reports with one quick view (all, open or done) selected.
+function useShowReports() {
+  const { setFilters, setTab } = useApp()
+  return (view: string) => {
+    setFilters({ ...DEFAULT_FILTERS, view })
+    setTab('reports')
+  }
+}
+
+const REPORT_VIEWS = ISSUE_VIEWS.filter((v) => ['all', 'open', 'done'].includes(v.key))
+
 function Overview() {
   const { notifications, auth, setTab } = useApp()
+  const showReports = useShowReports()
   const mine = useMyIssues()
   const open = mine.filter(isOpen).length
-  const unread = notifications.filter((n) => n.studentId === auth.studentId && !n.read).length
+  const unread = notifications.filter((n) => isForUser(n, auth) && !n.read).length
 
   return (
     <div>
       <StatRow
         items={[
-          { icon: 'list', value: mine.length, label: 'Total reports', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)' },
-          { icon: 'refresh', value: open, label: 'Currently open', bg: 'var(--warn-bg)', fg: 'var(--warn)' },
-          { icon: 'check-circle', value: mine.length - open, label: 'Resolved / closed', bg: 'var(--good-bg)', fg: 'var(--good)' },
-          { icon: 'bell', value: unread, label: 'Unread notifications', bg: '#e6f7f6', fg: 'var(--teal-deep)' },
+          { icon: 'list', value: mine.length, label: 'Total reports', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)', onClick: () => showReports('all') },
+          { icon: 'refresh', value: open, label: 'Currently open', bg: 'var(--warn-bg)', fg: 'var(--warn)', onClick: () => showReports('open') },
+          { icon: 'check-circle', value: mine.length - open, label: 'Resolved / closed', bg: 'var(--good-bg)', fg: 'var(--good)', onClick: () => showReports('done') },
+          { icon: 'bell', value: unread, label: 'Unread notifications', bg: '#e6f7f6', fg: 'var(--teal-deep)', onClick: () => setTab('notifications') },
         ]}
       />
       <div className="card">
@@ -79,9 +91,14 @@ function ReportIssue() {
     (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm({ ...form, [key]: e.target.value })
 
-  const submit = (e: FormEvent) => {
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
-    addIssue({ ...form, photo: !!photoName })
+    if (busy) return
+    setBusy(true)
+    // On success the app moves to My Reports; on failure the form stays filled in so it can be retried.
+    if (!(await addIssue({ ...form, photo: !!photoName }))) setBusy(false)
   }
 
   return (
@@ -163,8 +180,8 @@ function ReportIssue() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-          <button className="btn btn-primary" type="submit">
-            <Icon name="check" /> Submit report
+          <button className="btn btn-primary" type="submit" disabled={busy}>
+            <Icon name="check" /> {busy ? 'Submitting…' : 'Submit report'}
           </button>
           <button className="btn btn-ghost" type="button" onClick={() => setTab('overview')}>
             Cancel
@@ -176,13 +193,28 @@ function ReportIssue() {
 }
 
 function MyReports() {
-  const { setModal } = useApp()
-  const mine = useMyIssues()
+  const { setModal, filters, setFilters } = useApp()
+  const all = useMyIssues()
+  const view = REPORT_VIEWS.some((v) => v.key === filters.view) ? filters.view : 'all'
+  const mine = all.filter((issue) => matchesView(issue, view))
 
   return (
     <div className="card">
       <h2>My Reports</h2>
-      <p className="card-sub">{mine.length} report(s) submitted so far.</p>
+      <p className="card-sub">{all.length} report(s) submitted so far.</p>
+      <div className="toolbar" role="group" aria-label="Show">
+        {REPORT_VIEWS.map((v) => (
+          <button
+            key={v.key}
+            type="button"
+            className={'btn btn-sm ' + (view === v.key ? 'btn-primary' : 'btn-ghost')}
+            aria-pressed={view === v.key}
+            onClick={() => setFilters({ ...filters, view: v.key })}
+          >
+            {v.key === 'all' ? 'All reports' : v.label}
+          </button>
+        ))}
+      </div>
       {mine.length ? (
         mine.map((issue) => (
           <IssueRow
@@ -216,21 +248,24 @@ function MyReports() {
           />
         ))
       ) : (
-        <EmptyState icon="list" title="No reports yet" sub='Use "Report an Issue" to submit your first report.' />
+        <EmptyState
+          icon="list"
+          title={all.length ? 'Nothing in this view' : 'No reports yet'}
+          sub={all.length ? 'Try another filter above.' : 'Use "Report an Issue" to submit your first report.'}
+        />
       )}
     </div>
   )
 }
 
 function Notifications() {
-  const { notifications, auth, markNotificationsRead } = useApp()
-  const studentId = auth.studentId ?? ''
-  const mine = notifications.filter((n) => n.studentId === studentId)
+  const { notifications, auth, markNotificationsRead, setModal, issues } = useApp()
+  const mine = notifications.filter((n) => isForUser(n, auth))
   // Keep highlighting what was unread when the page opened.
   const [unreadOnOpen] = useState(() => new Set(mine.filter((n) => !n.read).map((n) => n.id)))
 
   // Mark everything as read when the student leaves this page.
-  useEffect(() => () => markNotificationsRead(studentId), [markNotificationsRead, studentId])
+  useEffect(() => () => markNotificationsRead(), [markNotificationsRead])
 
   return (
     <div className="card">
@@ -246,6 +281,15 @@ function Notifications() {
               <p style={{ margin: 0, fontSize: 12.5 }}>{n.message}</p>
               <time>{formatDate(n.date)}</time>
             </div>
+            {n.issueId && issues.some((i) => i.id === n.issueId) && (
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ alignSelf: 'center' }}
+                onClick={() => setModal({ type: 'detail', issueId: n.issueId as string })}
+              >
+                View
+              </button>
+            )}
           </div>
         ))
       ) : (

@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import "dotenv/config";
 import prisma from "./lib/prisma.js";
+import { broadcastChanges, eventsHandler } from "./lib/events.js";
 import { errorHandler } from "./lib/http.js";
 import { authRouter } from "./routes/auth.js";
 import { categoriesRouter } from "./routes/categories.js";
@@ -20,8 +21,18 @@ const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173,http://
   .split(",")
   .map((origin) => origin.trim());
 
-app.use(cors({ origin: allowedOrigins }));
+// Outside production, also allow the app opened from another device on the same network
+// (e.g. a phone visiting http://192.168.0.238:5173).
+const LOCAL_NETWORK = /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
+const isAllowedOrigin = (origin: string) =>
+  allowedOrigins.includes(origin) || (process.env.NODE_ENV !== "production" && LOCAL_NETWORK.test(origin));
+
+app.use(cors({ origin: (origin, done) => done(null, !origin || isAllowedOrigin(origin)) }));
 app.use(express.json());
+app.use(broadcastChanges);
+
+// Live updates for every logged-in browser.
+app.get("/api/events", eventsHandler);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -60,7 +71,8 @@ app.use(errorHandler);
 
 db(); // Load (or create) the data file before taking requests.
 
-app.listen(PORT, () => {
+// Listens on every network interface, so other devices on the same Wi-Fi can connect.
+app.listen(Number(PORT), "0.0.0.0", () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Data file: ${DATA_FILE}`);
 });

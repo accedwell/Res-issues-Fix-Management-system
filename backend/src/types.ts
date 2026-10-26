@@ -70,6 +70,8 @@ export interface Notification {
   message: string;
   date: string;
   read: boolean;
+  // The issue it is about, so the app can open it from the bell.
+  issueId?: string;
 }
 
 export interface Setting {

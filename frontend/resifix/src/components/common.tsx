@@ -11,22 +11,48 @@ export interface StatItem {
   label: string
   bg: string
   fg: string
+  // When set, the tile becomes a button that opens the matching list.
+  onClick?: () => void
 }
 
 export function StatRow({ items }: { items: StatItem[] }) {
   return (
     <div className="stat-row">
-      {items.map((item) => (
-        <div className="stat-tile" key={item.label} style={{ '--accent': item.fg } as CSSProperties}>
-          <div className="top">
-            <div className="icon-badge">
-              <Icon name={item.icon} />
+      {items.map((item) => {
+        const content = (
+          <>
+            <div className="top">
+              <div className="icon-badge">
+                <Icon name={item.icon} />
+              </div>
+              {item.onClick && (
+                <span className="stat-go">
+                  <Icon name="arrow-right" />
+                </span>
+              )}
             </div>
+            <b>{item.value}</b>
+            <span>{item.label}</span>
+          </>
+        )
+        const style = { '--accent': item.fg } as CSSProperties
+        return item.onClick ? (
+          <button
+            type="button"
+            className="stat-tile stat-tile-link"
+            key={item.label}
+            style={style}
+            onClick={item.onClick}
+            aria-label={`${item.label}: ${item.value}. View list`}
+          >
+            {content}
+          </button>
+        ) : (
+          <div className="stat-tile" key={item.label} style={style}>
+            {content}
           </div>
-          <b>{item.value}</b>
-          <span>{item.label}</span>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

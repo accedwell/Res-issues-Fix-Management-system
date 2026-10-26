@@ -14,10 +14,17 @@ import {
   updateProgress,
 } from "../services/issueWorkflow.js";
 import { listBlocks } from "../store/settings.js";
-import { PRIORITIES, type Priority } from "../types.js";
+import { getUser } from "../store/users.js";
+import { PRIORITIES, type Issue, type Priority } from "../types.js";
 
 export const issuesRouter = Router();
 issuesRouter.use(requireAuth);
+
+// Adds the assigned staff member's name, so every role can show who is working on it.
+async function present(issue: Issue) {
+  const staff = issue.assignedTo ? await getUser(issue.assignedTo) : undefined;
+  return { ...issue, assignedToName: staff?.name ?? null };
+}
 
 const param = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) ?? "";
 
@@ -31,12 +38,12 @@ issuesRouter.get("/", async (req, res) => {
     residence: q.residence,
     search: q.search,
   });
-  res.json({ issues });
+  res.json({ issues: await Promise.all(issues.map(present)) });
 });
 
 // GET /api/issues/:id
 issuesRouter.get("/:id", async (req, res) => {
-  res.json({ issue: await getIssueFor(currentUser(req), param(req.params.id)) });
+  res.json({ issue: await present(await getIssueFor(currentUser(req), param(req.params.id))) });
 });
 
 // POST /api/issues — student reports a new issue.
@@ -54,12 +61,12 @@ issuesRouter.post("/", requireRole("student"), async (req, res) => {
     description: requireString(body, "description", "Description"),
     photo: body.photo === true,
   });
-  res.status(201).json({ issue });
+  res.status(201).json({ issue: await present(issue) });
 });
 
 // POST /api/issues/:id/receive — admin acknowledges a new report.
 issuesRouter.post("/:id/receive", requireRole("admin"), async (req, res) => {
-  res.json({ issue: await receiveIssue(param(req.params.id)) });
+  res.json({ issue: await present(await receiveIssue(param(req.params.id))) });
 });
 
 // GET /api/issues/:id/recommended-staff — who the system would assign, plus everyone's workload.
@@ -73,7 +80,7 @@ issuesRouter.post("/:id/assign", requireRole("admin"), async (req, res) => {
   const body = req.body ?? {};
   const staffId = optionalString(body, "staffId");
   const priority = body.priority === undefined ? undefined : requireOneOf<Priority>(body, "priority", PRIORITIES);
-  res.json({ issue: await assignIssue(param(req.params.id), staffId, priority) });
+  res.json({ issue: await present(await assignIssue(param(req.params.id), staffId, priority)) });
 });
 
 // POST /api/issues/:id/progress — { status: "In Progress" | "Resolved", note? }
@@ -81,7 +88,7 @@ issuesRouter.post("/:id/progress", requireRole("maintenance", "admin"), async (r
   const body = req.body ?? {};
   const status = requireOneOf(body, "status", PROGRESS_STATUSES);
   const issue = await updateProgress(currentUser(req), param(req.params.id), status, optionalString(body, "note"));
-  res.json({ issue });
+  res.json({ issue: await present(issue) });
 });
 
 // POST /api/issues/:id/confirm — { rating: 1-5, comment? } student confirms the fix.
@@ -90,11 +97,11 @@ issuesRouter.post("/:id/confirm", requireRole("student"), async (req, res) => {
   const rating = Number(body.rating);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw badRequest("Rating must be a whole number from 1 to 5");
   const issue = await confirmResolution(currentUser(req), param(req.params.id), rating, optionalString(body, "comment") ?? "");
-  res.json({ issue });
+  res.json({ issue: await present(issue) });
 });
 
 // POST /api/issues/:id/not-fixed — { reason } student says it is still not fixed.
 issuesRouter.post("/:id/not-fixed", requireRole("student"), async (req, res) => {
   const reason = requireString(req.body ?? {}, "reason", "Reason");
-  res.json({ issue: await reportNotFixed(currentUser(req), param(req.params.id), reason) });
+  res.json({ issue: await present(await reportNotFixed(currentUser(req), param(req.params.id), reason)) });
 });

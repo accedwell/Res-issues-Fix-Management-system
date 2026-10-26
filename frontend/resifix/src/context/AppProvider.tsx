@@ -1,38 +1,61 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppContext, type AppState } from './appContext'
-import { clearToken } from '../api'
-import { CATEGORIES, DEFAULT_TABS, STAFF } from '../data/constants'
-import { SEED_ISSUES, SEED_NOTIFICATIONS, SEED_SETTINGS, SEED_USERS } from '../data/seed'
-import type { Auth, Filters, Issue, Modal, Role, Route, Status } from '../types'
+import {
+  apiAddCategory, apiAddUser, apiAssignIssue, apiConfirmResolution, apiCreateIssue, apiEditCategory, apiMe,
+  apiReadAllNotifications, apiReadNotification, apiRemoveCategory, apiRemoveUser, apiReportNotFixed, apiSetSetting,
+  apiUpdateProgress, clearToken, connectLiveUpdates, fetchCategories, fetchIssues, fetchNotifications, fetchSettings,
+  fetchStaff, fetchUsers, getToken, type ApiUser, type Topic,
+} from '../api'
+import { CATEGORIES, DEFAULT_FILTERS, DEFAULT_TABS, ROLE_NAMES } from '../data/constants'
+import { isForUser } from '../utils'
+import type { AppNotification, Auth, Category, Filters, Issue, Modal, Role, Route, Setting, Staff, User } from '../types'
 
-const today = () => new Date().toISOString().slice(0, 10)
+const LOGGED_OUT: Auth = { loggedIn: false, role: null, name: null, userId: null, studentId: null }
 
-const LOGGED_OUT: Auth = { loggedIn: false, role: null, name: null, studentId: null }
+const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings']
+const ISSUE_TOPICS: Topic[] = ['issues', 'notifications', 'staff']
+
+// Which data each role is allowed to load from the server.
+const TOPICS_FOR_ROLE: Record<Role, Topic[]> = {
+  student: ['issues', 'notifications', 'categories'],
+  maintenance: ['issues', 'notifications', 'categories'],
+  admin: ['issues', 'notifications', 'categories', 'staff'],
+  sysadmin: ['issues', 'notifications', 'categories', 'staff', 'users', 'settings'],
+}
+
+// The user list shows one "details" column: room for students, job for maintenance staff.
+function toUserRow(user: ApiUser): User {
+  const extra =
+    user.role === 'student'
+      ? [user.block, user.room && 'Room ' + user.room].filter(Boolean).join(' · ')
+      : user.role === 'maintenance'
+        ? (user.specialization ?? '')
+        : ''
+  return { id: user.id, name: user.name, role: ROLE_NAMES[user.role], email: user.email, extra: extra || '—' }
+}
+
+const errorMessage = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong. Please try again.')
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState<Route>('landing')
   const [auth, setAuth] = useState<Auth>(LOGGED_OUT)
+  const [restoring, setRestoring] = useState(() => !!getToken())
+  const [live, setLive] = useState(false)
   const [tabs, setTabs] = useState<Record<Role, string>>({ ...DEFAULT_TABS })
   const [modal, setModal] = useState<Modal | null>(null)
   const [toast, setToast] = useState<{ msg: string; id: number } | null>(null)
-  const [issues, setIssues] = useState(SEED_ISSUES)
-  const [notifications, setNotifications] = useState(SEED_NOTIFICATIONS)
-  const [users, setUsers] = useState(SEED_USERS)
-  const [categories, setCategories] = useState(CATEGORIES)
-  const [settings, setSettings] = useState(SEED_SETTINGS)
-  const [filters, setFilters] = useState<Filters>({ status: 'all', category: 'all', residence: 'all', search: '' })
+  const [issues, setIssues] = useState<Issue[]>([])
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [staff, setStaff] = useState<Staff[]>([])
+  const [categories, setCategories] = useState<Category[]>(CATEGORIES)
+  const [settings, setSettings] = useState<Setting[]>([])
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
 
-  const nextRef = useRef(133)
-  const nextNotification = useRef(5)
-  const nextUser = useRef(1000)
+  // The live-update handler runs outside React renders, so it reads the current role from here.
+  const roleRef = useRef<Role | null>(null)
 
   const showToast = useCallback((msg: string) => setToast({ msg, id: Date.now() }), [])
-
-  const markNotificationsRead = useCallback(
-    (studentId: string) =>
-      setNotifications((prev) => prev.map((n) => (n.studentId === studentId ? { ...n, read: true } : n))),
-    [],
-  )
 
   useEffect(() => {
     if (!toast) return
@@ -40,131 +63,189 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer)
   }, [toast])
 
+  const endSession = useCallback(() => {
+    clearToken()
+    roleRef.current = null
+    setModal(null)
+    setAuth(LOGGED_OUT)
+    setIssues([])
+    setNotifications([])
+    setUsers([])
+    setStaff([])
+    setSettings([])
+    setFilters(DEFAULT_FILTERS)
+    setRoute('landing')
+  }, [])
+
+  // Reloads the given kinds of data from the server (only those this role may see).
+  const refresh = useCallback(
+    async (topics: Topic[]) => {
+      const role = roleRef.current
+      if (!role) return
+      const wanted = topics.filter((t) => TOPICS_FOR_ROLE[role].includes(t))
+      const loaders: Record<Topic, () => Promise<void>> = {
+        issues: async () => setIssues(await fetchIssues()),
+        notifications: async () => setNotifications(await fetchNotifications()),
+        categories: async () => setCategories(await fetchCategories()),
+        staff: async () => setStaff(await fetchStaff()),
+        users: async () => setUsers((await fetchUsers()).map(toUserRow)),
+        settings: async () => setSettings(await fetchSettings()),
+      }
+      const results = await Promise.allSettled(wanted.map((t) => loaders[t]()))
+      const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+      if (!failed) return
+      // An expired or removed account can't load anything, so send the user back to log in.
+      if (/log in/i.test(errorMessage(failed.reason))) {
+        endSession()
+        showToast('Your session has ended. Please log in again.')
+      } else {
+        showToast(errorMessage(failed.reason))
+      }
+    },
+    [endSession, showToast],
+  )
+
+  const startSession = useCallback(
+    async (name: string, role: Role, userId: string, welcome: boolean) => {
+      roleRef.current = role
+      setAuth({ loggedIn: true, role, name, userId, studentId: role === 'student' ? userId : null })
+      setTabs({ ...DEFAULT_TABS })
+      setFilters(DEFAULT_FILTERS)
+      await refresh(TOPICS_FOR_ROLE[role])
+      if (!welcome) return
+      try {
+        const unread = (await fetchNotifications()).filter((n) => !n.read).length
+        if (unread) showToast(`You have ${unread} unread notification${unread === 1 ? '' : 's'} — check the bell.`)
+      } catch {
+        // The bell still shows the count once notifications load.
+      }
+    },
+    [refresh, showToast],
+  )
+
+  // Stay logged in across page refreshes while the saved token is still valid.
+  useEffect(() => {
+    if (!getToken()) return
+    apiMe()
+      .then((user) => startSession(user.name, user.role, user.id, false))
+      .catch(() => clearToken())
+      .finally(() => setRestoring(false))
+  }, [startSession])
+
+  // Live updates: reload whatever changed as soon as any user saves something.
+  useEffect(() => {
+    if (!auth.loggedIn) return
+    const close = connectLiveUpdates((topics) => void refresh(topics), setLive)
+    // Catch up after the tab was in the background or the connection dropped.
+    const onFocus = () => void refresh(ALL_TOPICS)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      close()
+      setLive(false)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [auth.loggedIn, auth.userId, refresh])
+
   const setTab = (tab: string) => {
     if (auth.role) setTabs((prev) => ({ ...prev, [auth.role as Role]: tab }))
   }
 
-  const notify = (studentId: string, message: string) =>
-    setNotifications((prev) => [
-      { id: 'n-' + nextNotification.current++, studentId, message, date: today(), read: false },
-      ...prev,
-    ])
+  // Runs a save on the server, reloads the affected data, then closes the window and confirms.
+  async function save<T>(action: () => Promise<T>, topics: Topic[], success?: string | ((result: T) => string)) {
+    try {
+      const result = await action()
+      await refresh(topics)
+      setModal(null)
+      if (success) showToast(typeof success === 'function' ? success(result) : success)
+      return true
+    } catch (err) {
+      showToast(errorMessage(err))
+      return false
+    }
+  }
 
-  const updateIssue = (id: string, change: (issue: Issue) => Issue) =>
-    setIssues((prev) => prev.map((issue) => (issue.id === id ? change(issue) : issue)))
-
-  const withStatus = (issue: Issue, status: Status, note: string): Issue => ({
-    ...issue,
-    status,
-    history: [...issue.history, { status, date: today(), note }],
-  })
+  const markNotificationsRead = useCallback(() => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    apiReadAllNotifications().catch(() => undefined)
+  }, [])
 
   const value: AppState = {
     route,
     setRoute,
     auth,
-    login: (name, role, userId) => {
-      setAuth({ loggedIn: true, role, name, studentId: role === 'student' ? userId : null })
-      setTabs({ ...DEFAULT_TABS })
-    },
-    logout: () => {
-      clearToken()
-      setModal(null)
-      setAuth(LOGGED_OUT)
-      setRoute('landing')
-    },
+    restoring,
+    live,
+    login: (name, role, userId) => void startSession(name, role, userId, true),
+    logout: endSession,
     tabs,
     setTab,
     modal,
     setModal,
     toast,
     issues,
-    notifications,
+    notifications: notifications.filter((n) => isForUser(n, auth)),
     users,
+    staff,
     categories,
     settings,
     filters,
     setFilters,
-    addIssue: (data) => {
-      const ref = 'ISS-2026-' + String(nextRef.current++).padStart(5, '0')
-      const issue: Issue = {
-        id: 'i-' + Date.now(),
-        ref,
-        ...data,
-        status: 'Submitted',
-        studentName: auth.name ?? '',
-        studentId: auth.studentId ?? '',
-        assignedTo: null,
-        dateReported: today(),
-        history: [{ status: 'Submitted', date: today(), note: 'Report submitted by student.' }],
-        feedback: null,
+    addIssue: async (data) => {
+      try {
+        const issue = await apiCreateIssue(data)
+        await refresh(ISSUE_TOPICS)
+        setTab('reports')
+        showToast('Report submitted — reference ' + issue.ref)
+        return true
+      } catch (err) {
+        showToast(errorMessage(err))
+        return false
       }
-      setIssues((prev) => [issue, ...prev])
-      setTab('reports')
-      showToast('Report submitted — reference ' + ref)
     },
-    assignIssue: (issue, staffId, priority) => {
-      const staffName = STAFF.find((s) => s.id === staffId)?.name ?? ''
-      updateIssue(issue.id, (i) =>
-        withStatus({ ...i, assignedTo: staffId, priority }, 'Assigned', 'Assigned to ' + staffName + ' by residence administrator.'),
-      )
-      notify(issue.studentId, issue.ref + ' has been assigned to ' + staffName + '.')
-      setModal(null)
-    },
-    updateProgress: (issue, status, note) => {
-      const text = note || (status === 'Resolved' ? 'Issue marked as resolved.' : 'Progress updated.')
-      updateIssue(issue.id, (i) => withStatus(i, status, text))
-      notify(issue.studentId, issue.ref + ' is now ' + status + '.')
-      setModal(null)
-    },
-    confirmResolution: (issue, rating, comment) => {
-      updateIssue(issue.id, (i) =>
-        withStatus({ ...i, feedback: { rating, comment } }, 'Closed', 'Student confirmed resolution and left feedback.'),
-      )
-      setModal(null)
-    },
-    reportNotFixed: (issue, reason) => {
-      updateIssue(issue.id, (i) =>
-        // Clear any earlier feedback so the student can rate the new fix.
-        withStatus({ ...i, reopened: (i.reopened || 0) + 1, feedback: null }, 'In Progress', 'Student reported the issue is NOT fixed: ' + reason),
-      )
-      notify(issue.studentId, issue.ref + ' was re-opened and sent back to maintenance.')
-      showToast('Issue re-opened — maintenance has been notified.')
-      setModal(null)
-    },
-    addUser: (user) => {
-      setUsers((prev) => [...prev, { id: 'u-' + nextUser.current++, ...user }])
-      setModal(null)
-    },
+    assignIssue: (issue, staffId, priority) =>
+      save(
+        () => apiAssignIssue(issue.id, staffId, priority),
+        ISSUE_TOPICS,
+        `Assigned to ${staff.find((s) => s.id === staffId)?.name ?? 'maintenance'}.`,
+      ),
+    updateProgress: (issue, status, note) =>
+      save(
+        () => apiUpdateProgress(issue.id, status, note),
+        ISSUE_TOPICS,
+        status === 'Resolved' ? 'Marked as resolved — the student will be asked to confirm.' : 'Progress saved.',
+      ),
+    confirmResolution: (issue, rating, comment) =>
+      save(() => apiConfirmResolution(issue.id, rating, comment), ISSUE_TOPICS, 'Thanks for confirming — the report is now closed.'),
+    reportNotFixed: (issue, reason) =>
+      save(() => apiReportNotFixed(issue.id, reason), ISSUE_TOPICS, 'Issue re-opened — maintenance has been notified.'),
+    addUser: (user) => save(() => apiAddUser(user), ['users', 'staff'], `${user.name} has been added.`),
     removeUser: (userId) => {
       const name = users.find((u) => u.id === userId)?.name ?? 'User'
-      setUsers((prev) => prev.filter((u) => u.id !== userId))
-      showToast(name + ' has been removed.')
-      setModal(null)
+      return save(
+        () => apiRemoveUser(userId),
+        ['users', 'staff', 'issues'],
+        (res) => name + ' has been removed.' + (res.unassignedJobs ? ` ${res.unassignedJobs} open job(s) need re-assigning.` : ''),
+      )
     },
-    addCategory: (name, icon) => {
-      const key =
-        name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'cat-' + Date.now()
-      // Keep "Other" as the last category.
-      setCategories((prev) => [...prev.slice(0, -1), { key, name, icon }, prev[prev.length - 1]])
-      setModal(null)
-    },
-    editCategory: (key, name, icon) => {
-      setCategories((prev) => prev.map((c) => (c.key === key ? { ...c, name, icon } : c)))
-      setModal(null)
-    },
+    addCategory: (name, icon) => save(() => apiAddCategory(name, icon), ['categories'], `${name} category added.`),
+    editCategory: (key, name, icon) => save(() => apiEditCategory(key, name, icon), ['categories'], 'Category updated.'),
     removeCategory: (key) => {
-      // "Other" is the fallback category, so it can't be removed.
-      if (key === 'other') return
       const name = categories.find((c) => c.key === key)?.name ?? 'Category'
-      setCategories((prev) => prev.filter((c) => c.key !== key))
-      // Existing reports in this category move to "Other" so none are lost.
-      setIssues((prev) => prev.map((i) => (i.category === key ? { ...i, category: 'other' } : i)))
-      showToast(name + ' category removed.')
-      setModal(null)
+      return save(
+        () => apiRemoveCategory(key),
+        ['categories', 'issues'],
+        (res) => name + ' category removed.' + (res.movedReports ? ` ${res.movedReports} report(s) moved to Other.` : ''),
+      )
     },
-    toggleSetting: (key) => setSettings((prev) => prev.map((s) => (s.key === key ? { ...s, on: !s.on } : s))),
+    toggleSetting: (key) => {
+      const current = settings.find((s) => s.key === key)
+      return save(() => apiSetSetting(key, !current?.on), ['settings'])
+    },
     markNotificationsRead,
+    markNotificationRead: (id) => {
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+      apiReadNotification(id).catch(() => undefined)
+    },
     catInfo: (key) => categories.find((c) => c.key === key) || categories[categories.length - 1],
   }
 

@@ -22,6 +22,8 @@ export interface Staff {
   id: string
   name: string
   specialization: string
+  // Unfinished jobs, as counted by the server.
+  openJobs: number
 }
 
 export interface HistoryEntry {
@@ -48,6 +50,8 @@ export interface Issue {
   studentName: string
   studentId: string
   assignedTo: string | null
+  // Sent by the server so students can see who is working on their report.
+  assignedToName?: string | null
   dateReported: string
   photo: boolean
   history: HistoryEntry[]
@@ -65,12 +69,16 @@ export interface NewIssue {
   photo: boolean
 }
 
+// Sent either to one person (userId) or to everyone with a role, e.g. all residence admins.
 export interface AppNotification {
   id: string
-  studentId: string
+  userId?: string
+  role?: Role
   message: string
   date: string
   read: boolean
+  // The issue it is about, so it can be opened from the bell.
+  issueId?: string
 }
 
 export interface User {
@@ -91,10 +99,13 @@ export interface Auth {
   loggedIn: boolean
   role: Role | null
   name: string | null
+  userId: string | null
   studentId: string | null
 }
 
 export interface Filters {
+  // Quick view picked from the dashboard tiles: all, open, unassigned, urgent or done.
+  view: string
   status: string
   category: string
   residence: string

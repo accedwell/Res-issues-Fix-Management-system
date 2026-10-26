@@ -1,12 +1,17 @@
 import { createContext, useContext } from 'react'
+import type { NewUserInput } from '../api'
 import type {
-  AppNotification, Auth, Category, Filters, Issue, Modal, NewIssue, Priority, Role, Route, Setting, Status, User,
+  AppNotification, Auth, Category, Filters, Issue, Modal, NewIssue, Priority, Role, Route, Setting, Staff, Status, User,
 } from '../types'
 
 export interface AppState {
   route: Route
   setRoute: (route: Route) => void
   auth: Auth
+  // True while a saved login is being checked after the page loads.
+  restoring: boolean
+  // Whether the live-update connection to the server is open.
+  live: boolean
   login: (name: string, role: Role, userId: string) => void
   logout: () => void
   tabs: Record<Role, string>
@@ -17,22 +22,25 @@ export interface AppState {
   issues: Issue[]
   notifications: AppNotification[]
   users: User[]
+  staff: Staff[]
   categories: Category[]
   settings: Setting[]
   filters: Filters
   setFilters: (filters: Filters) => void
-  addIssue: (issue: NewIssue) => void
-  assignIssue: (issue: Issue, staffId: string, priority: Priority) => void
-  updateProgress: (issue: Issue, status: Status, note: string) => void
-  confirmResolution: (issue: Issue, rating: number, comment: string) => void
-  reportNotFixed: (issue: Issue, reason: string) => void
-  addUser: (user: Omit<User, 'id'>) => void
-  removeUser: (userId: string) => void
-  addCategory: (name: string, icon: string) => void
-  editCategory: (key: string, name: string, icon: string) => void
-  removeCategory: (key: string) => void
-  toggleSetting: (key: string) => void
-  markNotificationsRead: (studentId: string) => void
+  // The actions below save to the server; each resolves to true when it worked.
+  addIssue: (issue: NewIssue) => Promise<boolean>
+  assignIssue: (issue: Issue, staffId: string, priority: Priority) => Promise<boolean>
+  updateProgress: (issue: Issue, status: Status, note: string) => Promise<boolean>
+  confirmResolution: (issue: Issue, rating: number, comment: string) => Promise<boolean>
+  reportNotFixed: (issue: Issue, reason: string) => Promise<boolean>
+  addUser: (user: NewUserInput) => Promise<boolean>
+  removeUser: (userId: string) => Promise<boolean>
+  addCategory: (name: string, icon: string) => Promise<boolean>
+  editCategory: (key: string, name: string, icon: string) => Promise<boolean>
+  removeCategory: (key: string) => Promise<boolean>
+  toggleSetting: (key: string) => Promise<boolean>
+  markNotificationsRead: () => void
+  markNotificationRead: (id: string) => void
   catInfo: (key: string) => Category
 }
 

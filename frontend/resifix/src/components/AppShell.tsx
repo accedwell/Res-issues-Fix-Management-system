@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
 import { ModalHost } from './Modals'
+import { NotificationBell } from './NotificationBell'
 import { useApp } from '../context/appContext'
 import { NAV, PAGE_TITLES, ROLE_NAMES } from '../data/constants'
 import { AdminDashboard } from '../dashboards/AdminDashboard'
@@ -18,7 +19,7 @@ const DASHBOARDS = {
 }
 
 export function AppShell() {
-  const { auth, tabs, setTab, logout, toast } = useApp()
+  const { auth, tabs, setTab, logout, toast, live } = useApp()
   const [menuOpen, setMenuOpen] = useState(false)
   const role = auth.role as Role
   const tab = tabs[role]
@@ -93,6 +94,11 @@ export function AppShell() {
                   <Icon name="plus-circle" /> Report Issue
                 </button>
               )}
+              <span className={'live-status' + (live ? ' on' : '')} title={live ? 'Live: updates appear instantly' : 'Reconnecting to the server…'}>
+                <span className="live-dot" aria-hidden="true" />
+                {live ? 'Live' : 'Offline'}
+              </span>
+              <NotificationBell />
               <button className="btn btn-ghost btn-sm" onClick={logout}>
                 <Icon name="logout" /> Log out
               </button>

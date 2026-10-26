@@ -518,3 +518,42 @@ table.simple tbody tr:hover td { background: rgba(77, 143, 240, .06); }
 .password-toggle .icon-inline svg { width: 18px; height: 18px; }
 /* Hide the browser's own reveal button (Edge) so only one eye shows */
 .password-input input::-ms-reveal, .password-input input::-ms-clear { display: none; }
+
+/* Clickable stat tiles */
+.stat-tile-link { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.stat-tile-link:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+.stat-tile-link:active { transform: translateY(-1px); }
+.stat-go { color: var(--ink-faint, var(--ink-soft)); opacity: 0; transform: translateX(-4px); transition: opacity .15s, transform .15s; }
+.stat-tile-link:hover .stat-go, .stat-tile-link:focus-visible .stat-go { opacity: 1; transform: none; color: var(--accent); }
+
+/* Notification bell */
+.bell-wrap { position: relative; }
+.bell-btn { position: relative; padding: 7px 10px; }
+.bell-btn .icon-inline svg { width: 18px; height: 18px; }
+.bell-badge { position: absolute; top: -6px; right: -6px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--bad); color: #fff; font-size: 10.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--panel); }
+.bell-panel { position: absolute; right: 0; top: calc(100% + 10px); width: 360px; max-width: calc(100vw - 32px); background: var(--panel); border: 1px solid var(--border); border-top: 3px solid var(--mint); border-radius: 14px; box-shadow: 0 18px 40px rgba(0, 0, 0, .45); z-index: 90; overflow: hidden; }
+.bell-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.bell-head b { font-size: 14px; }
+.bell-link { background: none; border: none; padding: 0; color: var(--mint-soft); font-size: 12px; font-weight: 700; cursor: pointer; }
+.bell-link:hover { text-decoration: underline; }
+.bell-list { list-style: none; margin: 0; padding: 6px; max-height: 360px; overflow-y: auto; }
+.bell-item { display: flex; gap: 10px; width: 100%; padding: 10px; border: none; border-radius: 10px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.bell-item:hover, .bell-item:focus-visible { background: rgba(26, 102, 220, .16); outline: none; }
+.bell-item.unread { background: rgba(34, 199, 169, .08); }
+.bell-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: 0 0 8px; background: transparent; }
+.bell-item.unread .bell-dot { background: var(--mint); }
+.bell-text { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; line-height: 1.45; }
+.bell-text time { font-size: 11px; color: var(--ink-soft); }
+.bell-item:not(.unread) .bell-text > span { color: var(--ink-soft); }
+.bell-empty { margin: 0; padding: 22px 16px; text-align: center; font-size: 12.5px; color: var(--ink-soft); }
+.bell-foot { display: block; width: 100%; padding: 11px; border: none; border-top: 1px solid var(--border); background: transparent; color: var(--mint-soft); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.bell-foot:hover { background: rgba(34, 199, 169, .08); }
+
+/* Live connection indicator and loading screen */
+.live-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); padding: 4px 9px; border: 1px solid var(--border); border-radius: 20px; }
+.live-status.on { color: var(--mint-soft); border-color: rgba(34, 199, 169, .4); }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.live-status.on .live-dot { background: var(--mint); box-shadow: 0 0 0 3px rgba(34, 199, 169, .2); animation: live-pulse 2s infinite; }
+@keyframes live-pulse { 50% { box-shadow: 0 0 0 6px rgba(34, 199, 169, 0); } }
+@media (max-width: 640px) { .live-status { display: none; } }
+.app-loading { min-height: 100vh; display: flex; align-items: center; justify-content: center; color: var(--ink-soft); font-size: 14px; font-weight: 600; }

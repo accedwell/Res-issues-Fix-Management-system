@@ -2,8 +2,8 @@ import type { ChangeEvent } from 'react'
 import { EmptyState, IssueRow, StatRow } from '../components/common'
 import { Icon } from '../components/Icon'
 import { useApp } from '../context/appContext'
-import { BLOCKS, STAFF, STATUSES, STATUS_CLASS } from '../data/constants'
-import { isOpen, stop } from '../utils'
+import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, STATUSES, STATUS_CLASS } from '../data/constants'
+import { isOpen, matchesView, stop } from '../utils'
 import type { Filters } from '../types'
 
 export function AdminDashboard({ tab }: { tab: string }) {
@@ -12,30 +12,41 @@ export function AdminDashboard({ tab }: { tab: string }) {
   return <Overview />
 }
 
+// Opens All Issues with only the given quick view (or status) applied.
+function useShowIssues() {
+  const { setFilters, setTab } = useApp()
+  return (view: string, status = 'all') => {
+    setFilters({ ...DEFAULT_FILTERS, view, status })
+    setTab('issues')
+  }
+}
+
 function Overview() {
-  const { issues, setTab, setModal } = useApp()
-  const unassigned = issues.filter((i) => !i.assignedTo && isOpen(i))
+  const { issues, setModal } = useApp()
+  const showIssues = useShowIssues()
+  const unassigned = issues.filter((i) => matchesView(i, 'unassigned'))
 
   return (
     <div>
       <StatRow
         items={[
-          { icon: 'list', value: issues.length, label: 'Total issues', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)' },
-          { icon: 'refresh', value: issues.filter(isOpen).length, label: 'Currently open', bg: 'var(--warn-bg)', fg: 'var(--warn)' },
-          { icon: 'user', value: unassigned.length, label: 'Awaiting assignment', bg: '#e6f7f6', fg: 'var(--teal-deep)' },
+          { icon: 'list', value: issues.length, label: 'Total issues', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)', onClick: () => showIssues('all') },
+          { icon: 'refresh', value: issues.filter(isOpen).length, label: 'Currently open', bg: 'var(--warn-bg)', fg: 'var(--warn)', onClick: () => showIssues('open') },
+          { icon: 'user', value: unassigned.length, label: 'Awaiting assignment', bg: '#e6f7f6', fg: 'var(--teal-deep)', onClick: () => showIssues('unassigned') },
           {
             icon: 'flag',
-            value: issues.filter((i) => i.priority === 'Urgent' && isOpen(i)).length,
+            value: issues.filter((i) => matchesView(i, 'urgent')).length,
             label: 'Urgent & open',
             bg: 'var(--bad-bg)',
             fg: 'var(--bad)',
+            onClick: () => showIssues('urgent'),
           },
         ]}
       />
       <div className="card">
         <div className="card-head">
           <h2>Needs attention</h2>
-          <button className="btn btn-ghost btn-sm" onClick={() => setTab('issues')}>
+          <button className="btn btn-ghost btn-sm" onClick={() => showIssues('all')}>
             View all issues
           </button>
         </div>
@@ -60,6 +71,7 @@ function AllIssues() {
   const search = filters.search.trim().toLowerCase()
   const matching = issues.filter(
     (i) =>
+      matchesView(i, filters.view) &&
       (filters.status === 'all' || i.status === filters.status) &&
       (filters.category === 'all' || i.category === filters.category) &&
       (filters.residence === 'all' || i.residence === filters.residence) &&
@@ -75,6 +87,13 @@ function AllIssues() {
       <p className="card-sub">{matching.length} matching issue(s)</p>
       <div className="toolbar">
         <input type="text" placeholder="Search title, ref, student..." value={filters.search} onChange={filter('search')} />
+        <select value={filters.view} onChange={filter('view')} aria-label="Show">
+          {ISSUE_VIEWS.map((v) => (
+            <option key={v.key} value={v.key}>
+              {v.label}
+            </option>
+          ))}
+        </select>
         <select value={filters.status} onChange={filter('status')}>
           <option value="all">All statuses</option>
           {STATUSES.map((s) => (
@@ -122,7 +141,8 @@ function AllIssues() {
 }
 
 function Reports() {
-  const { issues, categories } = useApp()
+  const { issues, categories, staff } = useApp()
+  const showIssues = useShowIssues()
   const rated = issues.filter((i) => i.feedback)
   const average = rated.length
     ? (rated.reduce((sum, i) => sum + (i.feedback?.rating ?? 0), 0) / rated.length).toFixed(1)
@@ -134,16 +154,17 @@ function Reports() {
         <h2>Summary</h2>
         <StatRow
           items={[
-            { icon: 'list', value: issues.length, label: 'Total issues logged', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)' },
+            { icon: 'list', value: issues.length, label: 'Total issues logged', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)', onClick: () => showIssues('all') },
             {
               icon: 'check-circle',
               value: issues.filter((i) => i.status === 'Closed').length,
               label: 'Closed & confirmed',
               bg: 'var(--good-bg)',
               fg: 'var(--good)',
+              onClick: () => showIssues('all', 'Closed'),
             },
             { icon: 'star', value: average, label: 'Average feedback rating', bg: 'var(--warn-bg)', fg: 'var(--warn)' },
-            { icon: 'user', value: STAFF.length, label: 'Maintenance staff', bg: '#e6f7f6', fg: 'var(--teal-deep)' },
+            { icon: 'user', value: staff.length, label: 'Maintenance staff', bg: '#e6f7f6', fg: 'var(--teal-deep)' },
           ]}
         />
       </div>

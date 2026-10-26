@@ -4,7 +4,7 @@ import { newId } from "../store/db.js";
 import { getIssue, insertIssue, listIssues, nextIssueRef, updateIssue, type IssueQuery } from "../store/issues.js";
 import { addNotification } from "../store/notifications.js";
 import { isSettingOn } from "../store/settings.js";
-import { getUser } from "../store/users.js";
+import { getUser, listUsers } from "../store/users.js";
 import { recommendStaff } from "./assignment.js";
 import { DONE_STATUSES, type Issue, type Priority, type Status, type User } from "../types.js";
 
@@ -38,7 +38,16 @@ function withStatus(issue: Issue, status: Status, note: string): Partial<Issue> 
 // Key updates (assigned, resolved, re-opened) always reach the student.
 // Other status changes only do when the "Auto-notify students" setting is on.
 async function notifyStudent(issue: Issue, message: string, important = false) {
-  if (important || (await isSettingOn("notify"))) await addNotification(issue.studentId, message);
+  if (important || (await isSettingOn("notify"))) await addNotification(issue.studentId, message, issue.id);
+}
+
+// Every residence administrator gets these (new reports, fixes, re-opened jobs).
+async function notifyAdmins(issue: Issue, message: string) {
+  for (const admin of await listUsers("admin")) await addNotification(admin.id, message, issue.id);
+}
+
+async function notifyStaff(issue: Issue, message: string) {
+  if (issue.assignedTo) await addNotification(issue.assignedTo, message, issue.id);
 }
 
 // ===== Workflow steps =====
@@ -71,6 +80,8 @@ export async function createIssue(student: User, input: NewIssueInput): Promise<
   };
   await insertIssue(issue);
   await notifyStudent(issue, `Your report ${issue.ref} was submitted.`);
+  const urgent = issue.priority === "Urgent" ? "URGENT " : "";
+  await notifyAdmins(issue, `New ${urgent}report ${issue.ref}: ${issue.title} (${issue.residence}, ${issue.room}).`);
   return issue;
 }
 
@@ -107,7 +118,7 @@ export async function assignIssue(id: string, staffId?: string, priority?: Prior
     ...withStatus(issue, "Assigned", note),
   });
   await notifyStudent(updated, `${issue.ref} has been assigned to ${staff.name}.`, true);
-  await addNotification(staff.id, `New job: ${issue.ref} — ${issue.title} (${issue.residence}, ${issue.room}).`);
+  await notifyStaff(updated, `New job: ${issue.ref} — ${issue.title} (${issue.residence}, ${issue.room}).`);
   return updated;
 }
 
@@ -125,6 +136,7 @@ export async function updateProgress(user: User, id: string, status: Status, not
   const updated = await updateIssue(id, withStatus(issue, status, text));
   if (status === "Resolved") {
     await notifyStudent(updated, `${issue.ref} has been marked Resolved — please confirm it is fixed.`, true);
+    await notifyAdmins(updated, `${issue.ref} — ${issue.title} was marked Resolved by ${user.name}.`);
   } else {
     await notifyStudent(updated, `${issue.ref} is now ${status}.`);
   }
@@ -135,10 +147,14 @@ export async function updateProgress(user: User, id: string, status: Status, not
 export async function confirmResolution(student: User, id: string, rating: number, comment: string): Promise<Issue> {
   const issue = await getIssueFor(student, id);
   if (issue.status !== "Resolved") throw badRequest("Only resolved issues can be confirmed");
-  return updateIssue(id, {
+  const updated = await updateIssue(id, {
     feedback: { rating, comment },
     ...withStatus(issue, "Closed", "Student confirmed resolution and left feedback."),
   });
+  const message = `${issue.ref} — ${issue.title} was confirmed fixed by the student (rated ${rating}/5).`;
+  await notifyStaff(updated, message);
+  await notifyAdmins(updated, message);
+  return updated;
 }
 
 // Student reports that a resolved or closed issue is still not fixed (or has come back).
@@ -153,8 +169,7 @@ export async function reportNotFixed(student: User, id: string, reason: string):
     ...withStatus(issue, "In Progress", "Student reported the issue is NOT fixed: " + reason),
   });
   await notifyStudent(updated, `${issue.ref} was re-opened and sent back to maintenance.`, true);
-  if (issue.assignedTo) {
-    await addNotification(issue.assignedTo, `Re-opened: ${issue.ref} — ${issue.title}. Student says: ${reason}`);
-  }
+  await notifyStaff(updated, `Re-opened: ${issue.ref} — ${issue.title}. Student says: ${reason}`);
+  await notifyAdmins(updated, `Re-opened: ${issue.ref} — ${issue.title}. Student says it is not fixed.`);
   return updated;
 }

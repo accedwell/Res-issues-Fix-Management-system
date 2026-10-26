@@ -7,7 +7,8 @@ import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
 
 function Screen() {
-  const { auth, route } = useApp()
+  const { auth, route, restoring } = useApp()
+  if (restoring) return <div className="app-loading">Loading ResiFix…</div>
   if (auth.loggedIn) return <AppShell />
   if (route === 'login') return <Login />
   if (route === 'signup') return <Signup />

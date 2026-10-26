@@ -1,9 +1,12 @@
 import { useState, type ChangeEvent } from 'react'
 import { Icon } from './Icon'
 import { useApp } from '../context/appContext'
-import { CATEGORY_ICONS, PRIORITIES, PRIORITY_CLASS, STAFF, STATUS_CLASS, USER_ROLES } from '../data/constants'
-import { canReportNotFixed, formatDate, openJobCount, recommendStaff } from '../utils'
-import type { Category, Issue, Priority, Status } from '../types'
+import { PasswordInput } from './PasswordInput'
+import {
+  BLOCKS, CATEGORY_ICONS, GENERAL_SPECIALIZATION, PRIORITIES, PRIORITY_CLASS, ROLE_NAMES, SPECIALIZATIONS, STATUS_CLASS,
+} from '../data/constants'
+import { canReportNotFixed, formatDate, recommendStaff } from '../utils'
+import type { Category, Issue, Priority, Role, Status } from '../types'
 
 export function ModalHost() {
   const { modal, setModal, issues } = useApp()
@@ -58,9 +61,9 @@ interface IssueModalProps {
 }
 
 function DetailModal({ issue, close }: IssueModalProps) {
-  const { catInfo, auth, setModal } = useApp()
+  const { catInfo, auth, setModal, staff: staffList } = useApp()
   const category = catInfo(issue.category)
-  const staff = STAFF.find((s) => s.id === issue.assignedTo)
+  const assignedName = issue.assignedToName ?? staffList.find((s) => s.id === issue.assignedTo)?.name
   const studentCanReopen = auth.role === 'student' && issue.studentId === auth.studentId && canReportNotFixed(issue)
 
   return (
@@ -107,7 +110,7 @@ function DetailModal({ issue, close }: IssueModalProps) {
           </tr>
           <tr>
             <td>Assigned to</td>
-            <td>{staff ? staff.name : '—'}</td>
+            <td>{assignedName || '—'}</td>
           </tr>
           <tr>
             <td>Photo</td>
@@ -150,10 +153,25 @@ function DetailModal({ issue, close }: IssueModalProps) {
 }
 
 function AssignModal({ issue, close }: IssueModalProps) {
-  const { assignIssue, issues, catInfo } = useApp()
-  const recommended = recommendStaff(issue, issues)
-  const [staffId, setStaffId] = useState(issue.assignedTo || recommended.id)
+  const { assignIssue, staff, catInfo } = useApp()
+  const recommended = recommendStaff(issue, staff)
+  const [staffId, setStaffId] = useState(issue.assignedTo || recommended?.id || '')
   const [priority, setPriority] = useState<Priority>(issue.priority)
+  const [busy, setBusy] = useState(false)
+
+  if (!recommended) {
+    return (
+      <div className="modal">
+        <h3>Assign maintenance staff</h3>
+        <p className="modal-sub">There are no maintenance staff accounts yet. Ask the system administrator to add one.</p>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={close}>
+            Close
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="modal">
@@ -168,7 +186,7 @@ function AssignModal({ issue, close }: IssueModalProps) {
             Auto-matched: {recommended.name} ({recommended.specialization})
           </b>
           <span>
-            Best fit for {catInfo(issue.category).name} issues · {openJobCount(recommended.id, issues)} open job(s)
+            Best fit for {catInfo(issue.category).name} issues · {recommended.openJobs} open job(s)
           </span>
         </div>
         {staffId !== recommended.id && (
@@ -180,10 +198,10 @@ function AssignModal({ issue, close }: IssueModalProps) {
       <div className="field">
         <label>Maintenance staff</label>
         <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
-          {STAFF.map((s) => (
+          {staff.map((s) => (
             <option key={s.id} value={s.id}>
               {s.id === recommended.id ? '★ ' : ''}
-              {s.name} — {s.specialization} ({openJobCount(s.id, issues)} open)
+              {s.name} — {s.specialization} ({s.openJobs} open)
             </option>
           ))}
         </select>
@@ -200,8 +218,15 @@ function AssignModal({ issue, close }: IssueModalProps) {
         <button className="btn btn-ghost" onClick={close}>
           Cancel
         </button>
-        <button className="btn btn-primary" onClick={() => assignIssue(issue, staffId, priority)}>
-          Assign
+        <button
+          className="btn btn-primary"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true)
+            if (!(await assignIssue(issue, staffId, priority))) setBusy(false)
+          }}
+        >
+          {busy ? 'Assigning…' : 'Assign'}
         </button>
       </div>
     </div>
@@ -334,18 +359,42 @@ function NotFixedModal({ issue, close }: IssueModalProps) {
   )
 }
 
+const NEW_USER_ROLES: Role[] = ['student', 'admin', 'maintenance', 'sysadmin']
+
 function AddUserModal({ close }: { close: () => void }) {
   const { addUser } = useApp()
-  const [form, setForm] = useState({ name: '', role: USER_ROLES[0], email: '', extra: '' })
-  const [showError, setShowError] = useState(false)
+  const [form, setForm] = useState({
+    name: '', role: 'maintenance' as Role, email: '', password: '',
+    specialization: GENERAL_SPECIALIZATION, studentNumber: '', block: BLOCKS[0], room: '',
+  })
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
   const field = (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm({ ...form, [key]: e.target.value })
 
+  const submit = async () => {
+    const isStudent = form.role === 'student'
+    if (!form.name.trim() || !form.email.trim()) return setError('Please fill in name and email.')
+    if (form.password.length < 8) return setError('The password must be at least 8 characters.')
+    if (isStudent && (!form.studentNumber.trim() || !form.room.trim())) return setError('Please fill in the student number and room.')
+    setError('')
+    setBusy(true)
+    const ok = await addUser({
+      name: form.name.trim(),
+      email: form.email.trim(),
+      role: form.role,
+      password: form.password,
+      ...(form.role === 'maintenance' ? { specialization: form.specialization } : {}),
+      ...(isStudent ? { studentNumber: form.studentNumber.trim(), block: form.block, room: form.room.trim() } : {}),
+    })
+    if (!ok) setBusy(false)
+  }
+
   return (
     <div className="modal">
       <h3>Add user</h3>
-      <p className="modal-sub">Create a new account for the platform.</p>
+      <p className="modal-sub">Create a new account. Give the person their email and starting password.</p>
       <div className="field">
         <label>Full name</label>
         <input type="text" value={form.name} onChange={field('name')} placeholder="e.g. Zanele Khumalo" />
@@ -353,40 +402,61 @@ function AddUserModal({ close }: { close: () => void }) {
       <div className="field">
         <label>Role</label>
         <select value={form.role} onChange={field('role')}>
-          {USER_ROLES.map((role) => (
-            <option key={role}>{role}</option>
+          {NEW_USER_ROLES.map((role) => (
+            <option key={role} value={role}>
+              {ROLE_NAMES[role]}
+            </option>
           ))}
         </select>
       </div>
       <div className="field">
         <label>Email address</label>
-        <input type="email" value={form.email} onChange={field('email')} placeholder="you@campus.ac.za" />
+        <input type="email" value={form.email} onChange={field('email')} placeholder="name@campus.ac.za" autoComplete="off" />
       </div>
       <div className="field">
-        <label>Details</label>
-        <input
-          type="text"
-          value={form.extra}
-          onChange={field('extra')}
-          placeholder="e.g. Block A · Room 101, or specialization"
-        />
+        <label>Starting password</label>
+        <PasswordInput value={form.password} onChange={field('password')} autoComplete="new-password" />
+        <div className="field-hint">At least 8 characters. They can change it with “Forgot password?”.</div>
       </div>
-      {showError && <div className="field-error">Please fill in name and email.</div>}
+      {form.role === 'maintenance' && (
+        <div className="field">
+          <label>Specialization</label>
+          <select value={form.specialization} onChange={field('specialization')}>
+            {SPECIALIZATIONS.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {form.role === 'student' && (
+        <>
+          <div className="field">
+            <label>Student number</label>
+            <input type="text" value={form.studentNumber} onChange={field('studentNumber')} placeholder="e.g. 22045678" />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="field">
+              <label>Block</label>
+              <select value={form.block} onChange={field('block')}>
+                {BLOCKS.map((b) => (
+                  <option key={b}>{b}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Room</label>
+              <input type="text" value={form.room} onChange={field('room')} placeholder="e.g. 204" />
+            </div>
+          </div>
+        </>
+      )}
+      {error && <div className="field-error">{error}</div>}
       <div className="modal-actions">
         <button className="btn btn-ghost" onClick={close}>
           Cancel
         </button>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            if (!form.name.trim() || !form.email.trim()) {
-              setShowError(true)
-              return
-            }
-            addUser({ name: form.name.trim(), role: form.role, email: form.email.trim(), extra: form.extra.trim() || '—' })
-          }}
-        >
-          <Icon name="check" /> Add user
+        <button className="btn btn-primary" disabled={busy} onClick={submit}>
+          <Icon name="check" /> {busy ? 'Adding…' : 'Add user'}
         </button>
       </div>
     </div>
@@ -401,7 +471,7 @@ function RemoveUserModal({ userId, close }: { userId: string; close: () => void 
     <div className="modal">
       <h3>Remove user</h3>
       <p className="modal-sub">
-        {user ? `Remove ${user.name} (${user.role})? This cannot be undone in this prototype.` : ''}
+        {user ? `Remove ${user.name} (${user.role})? They will no longer be able to log in. This cannot be undone.` : ''}
       </p>
       <div className="modal-actions">
         <button className="btn btn-ghost" onClick={close}>

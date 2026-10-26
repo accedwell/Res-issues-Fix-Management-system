@@ -1,18 +1,16 @@
 import { EmptyState, IssueRow } from '../components/common'
 import { useApp } from '../context/appContext'
-import { STAFF } from '../data/constants'
 import { isOpen, stop } from '../utils'
 
 export function MaintenanceDashboard({ tab }: { tab: string }) {
   const { issues, setModal } = useApp()
   const completed = tab === 'completed'
-  const tasks = issues
-    .filter((i) => i.assignedTo && STAFF.some((s) => s.id === i.assignedTo))
-    .filter((i) => (completed ? !isOpen(i) : isOpen(i)))
+  // The server only sends maintenance staff the jobs assigned to them.
+  const tasks = issues.filter((i) => (completed ? !isOpen(i) : isOpen(i)))
 
   return (
     <div className="card">
-      <h2>{completed ? 'Completed tasks' : 'Issues assigned to maintenance'}</h2>
+      <h2>{completed ? 'Completed tasks' : 'Jobs assigned to you'}</h2>
       <p className="card-sub">{tasks.length} issue(s)</p>
       {tasks.length ? (
         tasks.map((issue) => (
