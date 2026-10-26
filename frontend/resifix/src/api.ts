@@ -127,7 +127,7 @@ export const apiAssignIssue = (id: string, staffId: string, priority: Priority) 
   request('POST', `/issues/${id}/assign`, { staffId, priority })
 export const apiUpdateProgress = (id: string, status: Status, note: string) =>
   request('POST', `/issues/${id}/progress`, { status, note })
-export const apiConfirmResolution = (id: string, rating: number, comment: string) =>
+export const apiConfirmResolution = (id: string, rating: number | null, comment: string) =>
   request('POST', `/issues/${id}/confirm`, { rating, comment })
 export const apiReportNotFixed = (id: string, reason: string) => request('POST', `/issues/${id}/not-fixed`, { reason })
 

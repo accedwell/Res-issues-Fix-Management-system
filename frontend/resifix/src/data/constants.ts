@@ -21,13 +21,14 @@ export const CATEGORY_ICONS = [
 
 export const BLOCKS = ['Block A', 'Block B', 'Block C', 'Block D', 'Block E', 'Block F']
 
-export const STATUSES: Status[] = ['Submitted', 'Received', 'Assigned', 'In Progress', 'Resolved', 'Closed']
+export const STATUSES: Status[] = ['Submitted', 'Received', 'Assigned', 'In Progress', 'Not Resolved', 'Resolved', 'Closed']
 
 export const STATUS_CLASS: Record<Status, string> = {
   Submitted: 'status-submitted',
   Received: 'status-received',
   Assigned: 'status-assigned',
   'In Progress': 'status-inprogress',
+  'Not Resolved': 'status-notresolved',
   Resolved: 'status-resolved',
   Closed: 'status-closed',
 }

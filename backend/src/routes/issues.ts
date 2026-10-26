@@ -83,7 +83,7 @@ issuesRouter.post("/:id/assign", requireRole("admin"), async (req, res) => {
   res.json({ issue: await present(await assignIssue(param(req.params.id), staffId, priority)) });
 });
 
-// POST /api/issues/:id/progress — { status: "In Progress" | "Resolved", note? }
+// POST /api/issues/:id/progress — { status: "In Progress" | "Not Resolved" | "Resolved", note? }. "Not Resolved" needs a note.
 issuesRouter.post("/:id/progress", requireRole("maintenance", "admin"), async (req, res) => {
   const body = req.body ?? {};
   const status = requireOneOf(body, "status", PROGRESS_STATUSES);
@@ -91,11 +91,11 @@ issuesRouter.post("/:id/progress", requireRole("maintenance", "admin"), async (r
   res.json({ issue: await present(issue) });
 });
 
-// POST /api/issues/:id/confirm — { rating: 1-5, comment? } student confirms the fix.
+// POST /api/issues/:id/confirm — { rating?: 1-5, comment? } student confirms the fix. Rating is optional.
 issuesRouter.post("/:id/confirm", requireRole("student"), async (req, res) => {
   const body = req.body ?? {};
-  const rating = Number(body.rating);
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw badRequest("Rating must be a whole number from 1 to 5");
+  const rating = body.rating === undefined || body.rating === null ? null : Number(body.rating);
+  if (rating !== null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) throw badRequest("Rating must be a whole number from 1 to 5");
   const issue = await confirmResolution(currentUser(req), param(req.params.id), rating, optionalString(body, "comment") ?? "");
   res.json({ issue: await present(issue) });
 });

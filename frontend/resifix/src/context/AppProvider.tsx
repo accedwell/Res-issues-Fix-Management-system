@@ -218,7 +218,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       save(
         () => apiUpdateProgress(issue.id, status, note),
         ISSUE_TOPICS,
-        status === 'Resolved' ? 'Marked as resolved — the student will be asked to confirm.' : 'Progress saved.',
+        status === 'Resolved'
+          ? 'Marked as resolved — the student will be asked to confirm.'
+          : status === 'Not Resolved'
+            ? 'Marked as not resolved — the admin and student have been told why.'
+            : 'Progress saved.',
       ),
     confirmResolution: (issue, rating, comment) =>
       save(() => apiConfirmResolution(issue.id, rating, comment), ISSUE_TOPICS, 'Thanks for confirming — the report is now closed.'),

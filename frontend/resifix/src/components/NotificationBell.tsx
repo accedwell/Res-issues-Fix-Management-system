@@ -6,14 +6,26 @@ import type { AppNotification } from '../types'
 
 const MAX_SHOWN = 8
 
-// Bell in the top bar with the unread count. Opens a list of recent notifications.
+// Bell in the top bar with the unread count. Opening it shows the new notifications and marks
+// them as read, so they are gone from the bell next time.
 export function NotificationBell() {
-  const { notifications, auth, issues, setModal, setTab, markNotificationRead, markNotificationsRead } = useApp()
+  const { notifications, auth, issues, setModal, setTab, markNotificationsRead } = useApp()
   const [open, setOpen] = useState(false)
+  // The notifications that were new when the panel was opened.
+  const [shown, setShown] = useState<string[]>([])
   const wrap = useRef<HTMLDivElement>(null)
 
   const mine = notifications.filter((n) => isForUser(n, auth))
   const unread = mine.filter((n) => !n.read).length
+  const fresh = mine.filter((n) => shown.includes(n.id))
+
+  const toggle = () => {
+    if (!open) {
+      setShown(mine.filter((n) => !n.read).map((n) => n.id))
+      if (unread) markNotificationsRead()
+    }
+    setOpen(!open)
+  }
 
   // Close when clicking outside or pressing Escape.
   useEffect(() => {
@@ -33,7 +45,6 @@ export function NotificationBell() {
   }, [open])
 
   const openNotification = (n: AppNotification) => {
-    markNotificationRead(n.id)
     setOpen(false)
     if (n.issueId && issues.some((i) => i.id === n.issueId)) setModal({ type: 'detail', issueId: n.issueId })
   }
@@ -42,7 +53,7 @@ export function NotificationBell() {
     <div className="bell-wrap" ref={wrap}>
       <button
         className="btn btn-ghost btn-sm bell-btn"
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'}
         aria-expanded={open}
         aria-haspopup="true"
@@ -55,17 +66,12 @@ export function NotificationBell() {
         <div className="bell-panel" role="dialog" aria-label="Notifications">
           <div className="bell-head">
             <b>Notifications</b>
-            {unread > 0 && (
-              <button className="bell-link" onClick={markNotificationsRead}>
-                Mark all as read
-              </button>
-            )}
           </div>
-          {mine.length ? (
+          {fresh.length ? (
             <ul className="bell-list">
-              {mine.slice(0, MAX_SHOWN).map((n) => (
+              {fresh.slice(0, MAX_SHOWN).map((n) => (
                 <li key={n.id}>
-                  <button className={'bell-item' + (n.read ? '' : ' unread')} onClick={() => openNotification(n)}>
+                  <button className="bell-item unread" onClick={() => openNotification(n)}>
                     <span className="bell-dot" aria-hidden="true" />
                     <span className="bell-text">
                       <span>{n.message}</span>

@@ -4,10 +4,10 @@ import type { Category, Issue, Status } from './types'
 // Turns issues into a CSV file that opens cleanly in Excel, and downloads it.
 
 // The day the issue last reached a status, or '' if it never did.
-const lastDate = (issue: Issue, status: Status) => [...issue.history].reverse().find((h) => h.status === status)?.date ?? ''
+export const lastDate = (issue: Issue, status: Status) => [...issue.history].reverse().find((h) => h.status === status)?.date ?? ''
 
 // Open issues: days since reported. Finished ones: days it took to fix (report to resolved, or closed).
-function daysTaken(issue: Issue): number {
+export function daysTaken(issue: Issue): number {
   const fixed = lastDate(issue, 'Resolved') || lastDate(issue, 'Closed')
   if (isOpen(issue) || !fixed) return daysOpen(issue)
   return Math.max(0, Math.round((Date.parse(fixed) - Date.parse(issue.dateReported)) / 86_400_000))

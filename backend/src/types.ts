@@ -1,13 +1,15 @@
 export type Role = "student" | "admin" | "maintenance" | "sysadmin";
 
-export type Status = "Submitted" | "Received" | "Assigned" | "In Progress" | "Resolved" | "Closed";
+export type Status = "Submitted" | "Received" | "Assigned" | "In Progress" | "Not Resolved" | "Resolved" | "Closed";
 
 export type Priority = "Low" | "Normal" | "High" | "Urgent";
 
 export const ROLES: Role[] = ["student", "admin", "maintenance", "sysadmin"];
-export const STATUSES: Status[] = ["Submitted", "Received", "Assigned", "In Progress", "Resolved", "Closed"];
+export const STATUSES: Status[] = ["Submitted", "Received", "Assigned", "In Progress", "Not Resolved", "Resolved", "Closed"];
 export const PRIORITIES: Priority[] = ["Low", "Normal", "High", "Urgent"];
 export const DONE_STATUSES: Status[] = ["Resolved", "Closed"];
+// Days an issue may stay open before it counts as overdue (same as the frontend).
+export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 1, High: 3, Normal: 7, Low: 14 };
 
 export interface User {
   id: string;
@@ -42,7 +44,8 @@ export interface HistoryEntry {
 }
 
 export interface Feedback {
-  rating: number;
+  // 1-5, or null when the student confirmed without rating.
+  rating: number | null;
   comment: string;
 }
 

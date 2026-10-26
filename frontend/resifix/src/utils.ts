@@ -37,8 +37,10 @@ export function matchesView(issue: Issue, view: string): boolean {
   return true
 }
 
-// A student can send back any resolved or closed report if the problem is still there (or has come back).
-export const canReportNotFixed = (issue: Issue) => DONE_STATUSES.includes(issue.status)
+// A student can send back a report that was resolved or closed (the problem is still there or came back),
+// that maintenance could not resolve, or that is overdue. The server uses the same rule.
+export const canReportNotFixed = (issue: Issue) =>
+  DONE_STATUSES.includes(issue.status) || issue.status === 'Not Resolved' || isOverdue(issue)
 
 // Picks the staff member whose job matches the issue category, preferring whoever has the fewest open jobs.
 // Returns undefined only when there is no maintenance staff at all.

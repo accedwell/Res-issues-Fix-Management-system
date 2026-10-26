@@ -9,6 +9,8 @@ const STATUS_TO_DB: Record<Status, IssueStatus> = {
   Received: "RECEIVED",
   Assigned: "ASSIGNED",
   "In Progress": "IN_PROGRESS",
+  // Maintenance could not fix it (needs parts, a contractor, ...). Stored as the database's "on hold".
+  "Not Resolved": "ON_HOLD",
   Resolved: "RESOLVED",
   Closed: "CLOSED",
 };
@@ -18,8 +20,7 @@ const invert = <A extends string, B extends string>(map: Record<A, B>) =>
   Object.fromEntries(Object.entries(map).map(([a, b]) => [b, a])) as Record<B, A>;
 
 const ROLE_FROM_DB = invert(ROLE_TO_DB);
-// "On hold" exists in the database but not in the app yet, so it shows as in progress.
-const STATUS_FROM_DB: Record<IssueStatus, Status> = { ...invert(STATUS_TO_DB), ON_HOLD: "In Progress" };
+const STATUS_FROM_DB = invert(STATUS_TO_DB);
 const PRIORITY_FROM_DB = invert(PRIORITY_TO_DB);
 
 export const roleToDb = (role: Role) => ROLE_TO_DB[role];
@@ -54,6 +55,7 @@ export function notificationKind(message: string): { type: NotificationType; tit
   if (/^New .*report/i.test(message)) return { type: "ISSUE_CREATED", title: "New report" };
   if (/re-opened/i.test(message)) return { type: "STATUS_UPDATED", title: "Report re-opened" };
   if (/confirmed fixed/i.test(message)) return { type: "ISSUE_CLOSED", title: "Fix confirmed" };
+  if (/not resolved|could not be resolved/i.test(message)) return { type: "STATUS_UPDATED", title: "Not resolved" };
   if (/resolved/i.test(message)) return { type: "ISSUE_RESOLVED", title: "Marked resolved" };
   if (/assigned/i.test(message)) return { type: "ISSUE_ASSIGNED", title: "Report assigned" };
   if (/submitted/i.test(message)) return { type: "ISSUE_CREATED", title: "Report submitted" };

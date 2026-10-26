@@ -6,7 +6,7 @@ import { addNotification } from "../store/notifications.js";
 import { isSettingOn } from "../store/settings.js";
 import { getUser, listUsers } from "../store/users.js";
 import { recommendStaff } from "./assignment.js";
-import { DONE_STATUSES, type Issue, type Priority, type Status, type User } from "../types.js";
+import { DONE_STATUSES, OVERDUE_AFTER_DAYS, type Issue, type Priority, type Status, type User } from "../types.js";
 
 // ===== Access rules =====
 
@@ -122,7 +122,7 @@ export async function assignIssue(id: string, staffId?: string, priority?: Prior
   return updated;
 }
 
-export const PROGRESS_STATUSES: Status[] = ["In Progress", "Resolved"];
+export const PROGRESS_STATUSES: Status[] = ["In Progress", "Not Resolved", "Resolved"];
 
 // Maintenance staff (on their own jobs) or an admin record progress.
 export async function updateProgress(user: User, id: string, status: Status, note?: string): Promise<Issue> {
@@ -132,9 +132,15 @@ export async function updateProgress(user: User, id: string, status: Status, not
   if (!issue.assignedTo) throw badRequest("Assign the issue to maintenance staff first");
   if (DONE_STATUSES.includes(issue.status)) throw badRequest("This issue is already resolved or closed");
 
+  // The admin and student need to know why a job could not be fixed.
+  if (status === "Not Resolved" && !note?.trim()) throw badRequest("Please add a comment explaining why it could not be resolved");
+
   const text = note || (status === "Resolved" ? "Issue marked as resolved." : "Progress updated.");
   const updated = await updateIssue(id, withStatus(issue, status, text));
-  if (status === "Resolved") {
+  if (status === "Not Resolved") {
+    await notifyStudent(updated, `${issue.ref} could not be resolved yet: ${text}`, true);
+    await notifyAdmins(updated, `${issue.ref} — ${issue.title} was marked Not Resolved by ${user.name}: ${text}`);
+  } else if (status === "Resolved") {
     await notifyStudent(updated, `${issue.ref} has been marked Resolved — please confirm it is fixed.`, true);
     await notifyAdmins(updated, `${issue.ref} — ${issue.title} was marked Resolved by ${user.name}.`);
   } else {
@@ -143,30 +149,44 @@ export async function updateProgress(user: User, id: string, status: Status, not
   return updated;
 }
 
-// Student confirms the fix and rates the service.
-export async function confirmResolution(student: User, id: string, rating: number, comment: string): Promise<Issue> {
+// Student confirms the fix and can rate the person who fixed it. Rating and comment are optional.
+export async function confirmResolution(student: User, id: string, rating: number | null, comment: string): Promise<Issue> {
   const issue = await getIssueFor(student, id);
   if (issue.status !== "Resolved") throw badRequest("Only resolved issues can be confirmed");
+  const gaveFeedback = rating !== null || comment.trim() !== "";
   const updated = await updateIssue(id, {
-    feedback: { rating, comment },
-    ...withStatus(issue, "Closed", "Student confirmed resolution and left feedback."),
+    ...(gaveFeedback ? { feedback: { rating, comment } } : {}),
+    ...withStatus(issue, "Closed", gaveFeedback ? "Student confirmed resolution and left feedback." : "Student confirmed resolution."),
   });
-  const message = `${issue.ref} — ${issue.title} was confirmed fixed by the student (rated ${rating}/5).`;
+  const message = `${issue.ref} — ${issue.title} was confirmed fixed by the student${rating !== null ? ` (rated ${rating}/5)` : ""}.`;
   await notifyStaff(updated, message);
   await notifyAdmins(updated, message);
   return updated;
 }
 
-// Student reports that a resolved or closed issue is still not fixed (or has come back).
+// Still open after the time allowed for its priority.
+function isOverdue(issue: Issue): boolean {
+  const days = Math.floor((Date.parse(today()) - Date.parse(issue.dateReported)) / 86_400_000);
+  return !DONE_STATUSES.includes(issue.status) && days > OVERDUE_AFTER_DAYS[issue.priority];
+}
+
+// A student can re-open a report that was resolved or closed, that maintenance could not resolve,
+// or that is taking longer than it should.
+export const canReopen = (issue: Issue) =>
+  DONE_STATUSES.includes(issue.status) || issue.status === "Not Resolved" || isOverdue(issue);
+
+// Student reports that an issue is still not fixed (or has come back).
 export async function reportNotFixed(student: User, id: string, reason: string): Promise<Issue> {
   const issue = await getIssueFor(student, id);
-  if (!DONE_STATUSES.includes(issue.status)) throw badRequest("This issue is still being worked on");
+  if (!canReopen(issue)) throw badRequest("This issue is still being worked on");
 
+  // Send it back to maintenance. An overdue job keeps its stage (it may not even be assigned yet).
+  const status = DONE_STATUSES.includes(issue.status) || issue.status === "Not Resolved" ? "In Progress" : issue.status;
   const updated = await updateIssue(id, {
     reopened: issue.reopened + 1,
     // Clear earlier feedback so the student can rate the new fix.
     feedback: null,
-    ...withStatus(issue, "In Progress", "Student reported the issue is NOT fixed: " + reason),
+    ...withStatus(issue, status, "Student reported the issue is NOT fixed: " + reason),
   });
   await notifyStudent(updated, `${issue.ref} was re-opened and sent back to maintenance.`, true);
   await notifyStaff(updated, `Re-opened: ${issue.ref} — ${issue.title}. Student says: ${reason}`);

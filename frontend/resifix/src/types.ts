@@ -7,6 +7,7 @@ export type Status =
   | 'Received'
   | 'Assigned'
   | 'In Progress'
+  | 'Not Resolved'
   | 'Resolved'
   | 'Closed'
 
@@ -35,7 +36,8 @@ export interface HistoryEntry {
 }
 
 export interface Feedback {
-  rating: number
+  // 1-5, or null when the student confirmed without rating.
+  rating: number | null
   comment: string
 }
 

@@ -20,7 +20,7 @@ interface Event {
 function iconFor(event: Event): string {
   if (event.reopened) return 'refresh'
   return (
-    { Submitted: 'plus-circle', Received: 'check', Assigned: 'user', 'In Progress': 'tools', Resolved: 'check-circle', Closed: 'star' } as const
+    { Submitted: 'plus-circle', Received: 'check', Assigned: 'user', 'In Progress': 'tools', 'Not Resolved': 'x', Resolved: 'check-circle', Closed: 'star' } as const
   )[event.entry.status]
 }
 

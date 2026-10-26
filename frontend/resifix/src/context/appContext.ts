@@ -34,7 +34,7 @@ export interface AppState {
   receiveIssue: (issue: Issue) => Promise<boolean>
   assignIssue: (issue: Issue, staffId: string, priority: Priority) => Promise<boolean>
   updateProgress: (issue: Issue, status: Status, note: string) => Promise<boolean>
-  confirmResolution: (issue: Issue, rating: number, comment: string) => Promise<boolean>
+  confirmResolution: (issue: Issue, rating: number | null, comment: string) => Promise<boolean>
   reportNotFixed: (issue: Issue, reason: string) => Promise<boolean>
   addUser: (user: NewUserInput) => Promise<boolean>
   removeUser: (userId: string) => Promise<boolean>

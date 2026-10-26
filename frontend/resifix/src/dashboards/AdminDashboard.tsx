@@ -5,6 +5,7 @@ import { Icon } from '../components/Icon'
 import { TrendChart } from '../components/TrendChart'
 import { useApp } from '../context/appContext'
 import { downloadIssuesCsv } from '../exportCsv'
+import { buildReportHtml, customPeriod, issuesInPeriod, monthPeriod, openReport } from '../periodReport'
 import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, STATUSES, STATUS_CLASS } from '../data/constants'
 import { daysOpen, formatDate, initials, isOpen, isOverdue, lastReopen, matchesView, sameRoom, stop } from '../utils'
 import type { Filters, Issue } from '../types'
@@ -60,9 +61,9 @@ function Overview() {
   const showIssues = useShowIssues()
   const unassigned = issues.filter((i) => matchesView(i, 'unassigned'))
   const overdue = issues.filter(isOverdue)
-  // Unassigned or overdue issues, overdue first, then the oldest.
+  // Unassigned, not resolved or overdue issues, overdue first, then the oldest.
   const needsAttention = issues
-    .filter((i) => isOpen(i) && (!i.assignedTo || isOverdue(i)))
+    .filter((i) => isOpen(i) && (!i.assignedTo || i.status === 'Not Resolved' || isOverdue(i)))
     .sort((a, b) => Number(isOverdue(b)) - Number(isOverdue(a)) || daysOpen(b) - daysOpen(a))
 
   return (
@@ -98,7 +99,7 @@ function Overview() {
               View all issues
             </button>
           </div>
-          <p className="card-sub">Unassigned reports and anything overdue, most urgent first.</p>
+          <p className="card-sub">Unassigned reports, jobs maintenance could not resolve and anything overdue, most urgent first.</p>
           {needsAttention.length ? (
             needsAttention.slice(0, 6).map((issue) => (
               <IssueRow
@@ -119,18 +120,20 @@ function Overview() {
 }
 
 // Ratings students gave when confirming a fix: overall, per staff member, and the latest comments.
-function StudentFeedback() {
-  const { issues, setModal } = useApp()
-  const rated = issues
+function StudentFeedback({ issues }: { issues: Issue[] }) {
+  const { setModal } = useApp()
+  // Everything students left when confirming. Rating is optional, so some only have a comment.
+  const given = issues
     .filter((i) => i.feedback)
     .map((i) => ({
       issue: i,
-      rating: i.feedback?.rating ?? 0,
+      rating: i.feedback?.rating ?? null,
       comment: i.feedback?.comment ?? '',
       // When the student confirmed it: the latest "Closed" step in the history.
       date: [...i.history].reverse().find((h) => h.status === 'Closed')?.date ?? i.dateReported,
     }))
     .sort((a, b) => b.date.localeCompare(a.date))
+  const rated = given.flatMap((r) => (r.rating === null ? [] : [{ ...r, rating: r.rating }]))
   const average = rated.length ? rated.reduce((sum, r) => sum + r.rating, 0) / rated.length : 0
   const perStar = [5, 4, 3, 2, 1].map((star) => ({ star, count: rated.filter((r) => r.rating === star).length }))
   const mostStars = Math.max(1, ...perStar.map((s) => s.count))
@@ -148,11 +151,11 @@ function StudentFeedback() {
     <div className="card">
       <h2>Student feedback</h2>
       <p className="card-sub">Ratings students give when they confirm a fix. Low ratings are highlighted.</p>
-      {rated.length ? (
+      {given.length ? (
         <div className="feedback-grid">
           <div>
             <div className="rating-big">
-              <b>{average.toFixed(1)}</b>
+              <b>{rated.length ? average.toFixed(1) : '—'}</b>
               <span className="rating-stars" aria-label={`${average.toFixed(1)} out of 5`}>
                 {[1, 2, 3, 4, 5].map((n) => (
                   <span key={n} className={n <= Math.round(average) ? 'on' : ''}>
@@ -192,17 +195,21 @@ function StudentFeedback() {
           <div>
             <h3 className="hotspot-title">Latest comments</h3>
             <ul className="hotspot-list">
-              {rated.slice(0, 6).map((r) => (
+              {given.slice(0, 6).map((r) => (
                 <li key={r.issue.id}>
                   <button
-                    className={'hotspot-row' + (r.rating <= 2 ? ' low-rating' : '')}
+                    className={'hotspot-row' + (r.rating !== null && r.rating <= 2 ? ' low-rating' : '')}
                     onClick={() => setModal({ type: 'detail', issueId: r.issue.id })}
                   >
                     <span className="hotspot-head">
                       <b>
                         {r.issue.ref} · {r.issue.title}
                       </b>
-                      <span className={'rating-pill' + (r.rating <= 2 ? ' low' : '')}>{r.rating}★</span>
+                      {r.rating !== null ? (
+                        <span className={'rating-pill' + (r.rating <= 2 ? ' low' : '')}>{r.rating}★</span>
+                      ) : (
+                        <span className="hotspot-note">Not rated</span>
+                      )}
                     </span>
                     <span className="reopen-reason">{r.comment ? `“${r.comment}”` : 'No comment'}</span>
                     <span className="hotspot-note">
@@ -216,15 +223,15 @@ function StudentFeedback() {
           </div>
         </div>
       ) : (
-        <EmptyState icon="star" title="No ratings yet" sub="Students rate the service when they confirm a fix." />
+        <EmptyState icon="star" title="No feedback yet" sub="Students can rate the fixer (optional) when they confirm a fix." />
       )}
     </div>
   )
 }
 
 // Fixes the students rejected, newest first, and how often each staff member's work came back.
-function ReopenedFixes() {
-  const { issues, setModal } = useApp()
+function ReopenedFixes({ issues }: { issues: Issue[] }) {
+  const { setModal } = useApp()
   const showIssues = useShowIssues()
   const reopened = issues
     .filter((i) => (i.reopened ?? 0) > 0)
@@ -290,8 +297,8 @@ function ReopenedFixes() {
 }
 
 // Where problems keep happening: busiest blocks, and rooms with more than one report.
-function Hotspots() {
-  const { issues, catInfo } = useApp()
+function Hotspots({ issues }: { issues: Issue[] }) {
+  const { catInfo } = useApp()
   const showIssues = useShowIssues()
 
   // Most common category name among some issues.
@@ -354,7 +361,7 @@ function Hotspots() {
           </ul>
         </div>
         <div>
-          <h3 className="hotspot-title">Repeat problems in the same room</h3>
+          <h3 className="hotspot-title">Repeated problems in the same room</h3>
           {repeats.length ? (
             <ul className="hotspot-list">
               {repeats.map((r) => (
@@ -364,7 +371,7 @@ function Hotspots() {
                       <b>
                         {r.block} · {r.room}
                       </b>
-                      <span className="repeat-count">{r.count}×</span>
+                      <span className="repeat-count">{r.count}</span>
                     </span>
                     <span className="hotspot-note">
                       {r.categories.join(', ')} · last reported {formatDate(r.last)}
@@ -529,10 +536,115 @@ function AllIssues() {
   )
 }
 
+// Every month from the first report until the current one (YYYY-MM), newest first.
+function reportMonths(issues: Issue[], current: string): string[] {
+  const first = issues.reduce((min, i) => (i.dateReported < min ? i.dateReported : min), current)
+  const months: string[] = []
+  for (let d = new Date(first.slice(0, 7) + '-01T00:00:00Z'); d.toISOString().slice(0, 7) <= current; d.setUTCMonth(d.getUTCMonth() + 1)) {
+    months.unshift(d.toISOString().slice(0, 7))
+  }
+  return months
+}
+
+// Pick a month (or your own dates), then view the report, save it as a PDF or download the issues as a spreadsheet.
+// "scope" describes any search on the Reports page, so the report says what it covers.
+function PeriodReport({ issues, scope }: { issues: Issue[]; scope: string }) {
+  const { catInfo, auth } = useApp()
+  const [today] = useState(() => new Date().toISOString().slice(0, 10))
+  const thisMonth = today.slice(0, 7)
+  const months = reportMonths(issues, thisMonth)
+  const [choice, setChoice] = useState(thisMonth)
+  const [from, setFrom] = useState(thisMonth + '-01')
+  const [to, setTo] = useState(today)
+  const [blocked, setBlocked] = useState(false)
+
+  const custom = choice === 'custom'
+  const badRange = custom && (!from || !to || from > to)
+  const period = custom ? customPeriod(from, to) : monthPeriod(choice)
+  const count = badRange ? 0 : issuesInPeriod(issues, period).length
+
+  const open = (print: boolean) => {
+    const html = buildReportHtml(issues, period, catInfo, auth.name ?? 'Residence administrator', scope)
+    setBlocked(!openReport(html, print))
+  }
+
+  return (
+    <div className="card">
+      <h2>Period report</h2>
+      <p className="card-sub">A report for one month or dates you choose. View it, save it as a PDF, or download the issues as a spreadsheet.</p>
+      <div className="toolbar" style={{ alignItems: 'center' }}>
+        <select value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="Report period">
+          {months.map((m) => (
+            <option key={m} value={m}>
+              {monthPeriod(m).label}
+              {m === thisMonth ? ' (this month)' : ''}
+            </option>
+          ))}
+          <option value="custom">Choose dates…</option>
+        </select>
+        {custom && (
+          <>
+            <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
+            <span className="hotspot-note">to</span>
+            <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} aria-label="To" />
+          </>
+        )}
+      </div>
+      {badRange ? (
+        <div className="field-error">Pick a start date that is on or before the end date.</div>
+      ) : (
+        <p className="hotspot-note" style={{ marginTop: 0 }}>
+          {count} issue{count === 1 ? '' : 's'} reported in {period.label}.
+        </p>
+      )}
+      <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
+        <button className="btn btn-primary btn-sm" disabled={badRange} onClick={() => open(false)}>
+          <Icon name="eye" /> View report
+        </button>
+        <button className="btn btn-ghost btn-sm" disabled={badRange} onClick={() => open(true)}>
+          <Icon name="file-text" /> Download PDF
+        </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          disabled={badRange || !count}
+          onClick={() => downloadIssuesCsv(issuesInPeriod(issues, period), catInfo, `resifix-report-${period.slug}`)}
+        >
+          <Icon name="list" /> Download spreadsheet (CSV)
+        </button>
+      </div>
+      {blocked && <div className="field-error">Your browser blocked the new tab. Allow pop-ups for this site and try again.</div>}
+    </div>
+  )
+}
+
+const NO_SEARCH = { text: '', category: 'all', block: 'all', staff: 'all' }
+
 function Reports() {
-  const { issues, categories, staff, catInfo } = useApp()
+  const { issues: all, categories, staff, catInfo } = useApp()
   const showIssues = useShowIssues()
-  const rated = issues.filter((i) => i.feedback)
+  // Searching narrows every section on this page, the period report and the downloads.
+  const [search, setSearch] = useState(NO_SEARCH)
+  const text = search.text.trim().toLowerCase()
+  const issues = all.filter(
+    (i) =>
+      (search.category === 'all' || i.category === search.category) &&
+      (search.block === 'all' || i.residence === search.block) &&
+      (search.staff === 'all' || i.assignedTo === search.staff) &&
+      (!text ||
+        [i.title, i.ref, i.studentName, i.room, i.description, i.assignedToName ?? ''].join(' ').toLowerCase().includes(text)),
+  )
+  const searching = !!text || search.category !== 'all' || search.block !== 'all' || search.staff !== 'all'
+  const scope = [
+    text && `"${search.text.trim()}"`,
+    search.category !== 'all' && catInfo(search.category).name,
+    search.block !== 'all' && search.block,
+    search.staff !== 'all' && staff.find((s) => s.id === search.staff)?.name,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const set = (key: keyof typeof NO_SEARCH) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setSearch({ ...search, [key]: e.target.value })
+  const rated = issues.filter((i) => i.feedback?.rating != null)
   const average = rated.length
     ? (rated.reduce((sum, i) => sum + (i.feedback?.rating ?? 0), 0) / rated.length).toFixed(1)
     : '—'
@@ -540,78 +652,133 @@ function Reports() {
   return (
     <div>
       <div className="card">
-        <div className="card-head">
-          <h2>Summary</h2>
-          <button
-            className="btn btn-ghost btn-sm"
-            disabled={!issues.length}
-            onClick={() => downloadIssuesCsv(issues, catInfo, 'resifix-all-issues')}
-            title="Download every issue as a spreadsheet"
-          >
-            <Icon name="file-text" /> Export all issues (CSV)
-          </button>
-        </div>
-        <StatRow
-          items={[
-            { icon: 'list', value: issues.length, label: 'Total issues logged', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)', onClick: () => showIssues('all') },
-            {
-              icon: 'check-circle',
-              value: issues.filter((i) => i.status === 'Closed').length,
-              label: 'Closed & confirmed',
-              bg: 'var(--good-bg)',
-              fg: 'var(--good)',
-              onClick: () => showIssues('all', 'Closed'),
-            },
-            { icon: 'star', value: average, label: 'Average feedback rating', bg: 'var(--warn-bg)', fg: 'var(--warn)' },
-            { icon: 'user', value: staff.length, label: 'Maintenance staff', bg: '#e6f7f6', fg: 'var(--teal-deep)' },
-          ]}
-        />
-      </div>
-      <TrendChart issues={issues} />
-      <Hotspots />
-      <ReopenedFixes />
-      <StudentFeedback />
-      <div className="card">
-        <h2>Issues by category</h2>
-        <table className="simple">
-          <tbody>
-            <tr>
-              <th>Category</th>
-              <th>Reports</th>
-            </tr>
-            {categories
-              .map((c) => ({ c, n: issues.filter((i) => i.category === c.key).length }))
-              .filter(({ n }) => n > 0)
-              .map(({ c, n }) => (
-                <tr key={c.key}>
-                  <td>
-                    <Icon name={c.icon} /> {c.name}
-                  </td>
-                  <td>{n}</td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="card">
-        <h2>Issues by status</h2>
-        <table className="simple">
-          <tbody>
-            <tr>
-              <th>Status</th>
-              <th>Count</th>
-            </tr>
-            {STATUSES.map((s) => (
-              <tr key={s}>
-                <td>
-                  <span className={'status-pill ' + STATUS_CLASS[s]}>{s}</span>
-                </td>
-                <td>{issues.filter((i) => i.status === s).length}</td>
-              </tr>
+        <h2>Search reports</h2>
+        <p className="card-sub">Search or filter, and every section below — including the period report and downloads — shows only the matching issues.</p>
+        <div className="toolbar" style={{ marginBottom: 0 }}>
+          <input
+            type="search"
+            placeholder="Search title, ref, student, room, staff..."
+            value={search.text}
+            onChange={set('text')}
+            aria-label="Search reports"
+            style={{ flex: '1 1 240px' }}
+          />
+          <select value={search.category} onChange={set('category')} aria-label="Category">
+            <option value="all">All categories</option>
+            {categories.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.name}
+              </option>
             ))}
-          </tbody>
-        </table>
+          </select>
+          <select value={search.block} onChange={set('block')} aria-label="Block">
+            <option value="all">All blocks</option>
+            {BLOCKS.map((b) => (
+              <option key={b}>{b}</option>
+            ))}
+          </select>
+          <select value={search.staff} onChange={set('staff')} aria-label="Staff member">
+            <option value="all">All staff</option>
+            {staff.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          {searching && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setSearch(NO_SEARCH)}>
+              <Icon name="x" /> Clear
+            </button>
+          )}
+        </div>
+        {searching && (
+          <p className="hotspot-note" style={{ margin: '12px 0 0' }}>
+            Showing <b>{issues.length}</b> of {all.length} issues for {scope}.
+          </p>
+        )}
       </div>
+      {searching && !issues.length ? (
+        <div className="card">
+          <EmptyState icon="search" title="No issues match your search" sub="Try other words or clear the filters." />
+        </div>
+      ) : (
+        <>
+          <PeriodReport issues={issues} scope={scope} />
+          <div className="card">
+            <div className="card-head">
+              <h2>Summary</h2>
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={!issues.length}
+                onClick={() => downloadIssuesCsv(issues, catInfo, searching ? 'resifix-search-results' : 'resifix-all-issues')}
+                title={searching ? 'Download the matching issues as a spreadsheet' : 'Download every issue as a spreadsheet'}
+              >
+                <Icon name="file-text" /> {searching ? `Export ${issues.length === 1 ? 'this issue' : `these ${issues.length} issues`} (CSV)` : 'Export all issues (CSV)'}
+              </button>
+            </div>
+            <StatRow
+              items={[
+                { icon: 'list', value: issues.length, label: 'Total issues logged', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)', onClick: () => showIssues('all') },
+                {
+                  icon: 'check-circle',
+                  value: issues.filter((i) => i.status === 'Closed').length,
+                  label: 'Closed & confirmed',
+                  bg: 'var(--good-bg)',
+                  fg: 'var(--good)',
+                  onClick: () => showIssues('all', 'Closed'),
+                },
+                { icon: 'star', value: average, label: 'Average feedback rating', bg: 'var(--warn-bg)', fg: 'var(--warn)' },
+                { icon: 'user', value: staff.length, label: 'Maintenance staff', bg: '#e6f7f6', fg: 'var(--teal-deep)' },
+              ]}
+            />
+          </div>
+          <TrendChart issues={issues} />
+          <Hotspots issues={issues} />
+          <ReopenedFixes issues={issues} />
+          <StudentFeedback issues={issues} />
+          <div className="card">
+            <h2>Issues by category</h2>
+            <table className="simple">
+              <tbody>
+                <tr>
+                  <th>Category</th>
+                  <th>Reports</th>
+                </tr>
+                {categories
+                  .map((c) => ({ c, n: issues.filter((i) => i.category === c.key).length }))
+                  .filter(({ n }) => n > 0)
+                  .map(({ c, n }) => (
+                    <tr key={c.key}>
+                      <td>
+                        <Icon name={c.icon} /> {c.name}
+                      </td>
+                      <td>{n}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="card">
+            <h2>Issues by status</h2>
+            <table className="simple">
+              <tbody>
+                <tr>
+                  <th>Status</th>
+                  <th>Count</th>
+                </tr>
+                {STATUSES.map((s) => (
+                  <tr key={s}>
+                    <td>
+                      <span className={'status-pill ' + STATUS_CLASS[s]}>{s}</span>
+                    </td>
+                    <td>{issues.filter((i) => i.status === s).length}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   )
 }

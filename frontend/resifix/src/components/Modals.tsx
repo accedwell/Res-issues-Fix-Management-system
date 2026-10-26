@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent } from 'react'
 import { Icon } from './Icon'
+import { ProgressSteps } from './ProgressSteps'
 import { useApp } from '../context/appContext'
 import { PasswordInput } from './PasswordInput'
 import {
@@ -86,6 +87,9 @@ function DetailModal({ issue, close }: IssueModalProps) {
           <Icon name={category.icon} /> {category.name}
         </span>
       </div>
+      <div style={{ margin: '4px 0 16px' }}>
+        <ProgressSteps issue={issue} />
+      </div>
       {issue.reopened ? (
         <div className="field-error" style={{ margin: '0 0 10px', fontWeight: 700 }}>
           Re-opened {issue.reopened}× — student reported it was not fixed.
@@ -136,7 +140,7 @@ function DetailModal({ issue, close }: IssueModalProps) {
       </ul>
       {issue.feedback && (
         <div className="card" style={{ margin: '14px 0 0', background: 'var(--good-bg)', borderColor: 'transparent' }}>
-          <b style={{ fontSize: 12.5 }}>Student feedback — {issue.feedback.rating}/5</b>
+          <b style={{ fontSize: 12.5 }}>Student feedback — {issue.feedback.rating !== null ? `${issue.feedback.rating}/5` : 'not rated'}</b>
           <p style={{ margin: '4px 0 0', fontSize: 12 }}>{issue.feedback.comment}</p>
         </div>
       )}
@@ -256,6 +260,14 @@ function UpdateModal({ issue, close }: IssueModalProps) {
   const { updateProgress } = useApp()
   const [status, setStatus] = useState<Status>('In Progress')
   const [comment, setComment] = useState('')
+  const [error, setError] = useState('')
+  // The admin and student need to know why a job could not be fixed.
+  const needsComment = status === 'Not Resolved'
+
+  const save = () => {
+    if (needsComment && !comment.trim()) return setError('Please explain why it could not be resolved.')
+    updateProgress(issue, status, comment)
+  }
 
   return (
     <div className="modal">
@@ -265,20 +277,35 @@ function UpdateModal({ issue, close }: IssueModalProps) {
       </p>
       <div className="field">
         <label>New status</label>
-        <select value={status} onChange={(e) => setStatus(e.target.value as Status)}>
+        <select
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value as Status)
+            setError('')
+          }}
+        >
           <option>In Progress</option>
+          <option>Not Resolved</option>
           <option>Resolved</option>
         </select>
       </div>
       <div className="field">
-        <label>Comment</label>
-        <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="What did you do / find?" />
+        <label>Comment{needsComment && ' (required)'}</label>
+        <textarea
+          value={comment}
+          onChange={(e) => {
+            setComment(e.target.value)
+            setError('')
+          }}
+          placeholder={needsComment ? 'Why could it not be fixed? e.g. waiting for a part, needs a contractor' : 'What did you do / find?'}
+        />
+        {error && <div className="field-error">{error}</div>}
       </div>
       <div className="modal-actions">
         <button className="btn btn-ghost" onClick={close}>
           Cancel
         </button>
-        <button className="btn btn-primary" onClick={() => updateProgress(issue, status, comment)}>
+        <button className="btn btn-primary" onClick={save}>
           Save update
         </button>
       </div>
@@ -288,8 +315,10 @@ function UpdateModal({ issue, close }: IssueModalProps) {
 
 function FeedbackModal({ issue }: { issue: Issue }) {
   const { confirmResolution, setModal } = useApp()
-  const [rating, setRating] = useState(5)
+  // No stars picked means the student chose not to rate.
+  const [rating, setRating] = useState<number | null>(null)
   const [comment, setComment] = useState('')
+  const fixer = issue.assignedToName
 
   return (
     <div className="modal">
@@ -299,20 +328,23 @@ function FeedbackModal({ issue }: { issue: Issue }) {
       </p>
       <p style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Has this issue been fixed to your satisfaction?</p>
       <div className="field">
-        <label>Rate the service</label>
+        <label>{fixer ? `Rate ${fixer}, who fixed it (optional)` : 'Rate the fix (optional)'}</label>
         <div className="stars">
           {[1, 2, 3, 4, 5].map((n) => (
             <button
               key={n}
               type="button"
-              className={n <= rating ? 'active' : ''}
-              onClick={() => setRating(n)}
+              className={rating !== null && n <= rating ? 'active' : ''}
+              // Tapping the chosen star again clears the rating.
+              onClick={() => setRating(rating === n ? null : n)}
               aria-label={n + ' star'}
+              aria-pressed={rating === n}
             >
               <Icon name="star" />
             </button>
           ))}
         </div>
+        <p className="field-hint">{rating === null ? 'You can skip this.' : `${rating} out of 5 · tap the star again to clear`}</p>
       </div>
       <div className="field">
         <label>Comment (optional)</label>

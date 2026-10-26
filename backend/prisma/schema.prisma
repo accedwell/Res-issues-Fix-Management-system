@@ -190,7 +190,8 @@ model IssueFeedback {
   id        String   @id @default(cuid())
   issueId   String   @unique @map("issue_id")
   userId    String   @map("user_id")
-  rating    Int
+  // Optional: a student can confirm a fix without rating it.
+  rating    Int?
   comment   String?  @db.Text
   createdAt DateTime @default(now()) @map("created_at")
 
