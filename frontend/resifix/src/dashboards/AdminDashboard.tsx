@@ -618,12 +618,15 @@ function PeriodReport({ issues, scope }: { issues: Issue[]; scope: string }) {
 }
 
 const NO_SEARCH = { text: '', category: 'all', block: 'all', staff: 'all' }
+// How many matching issues to list under the search before "Show all".
+const RESULTS_SHOWN = 5
 
 function Reports() {
   const { issues: all, categories, staff, catInfo } = useApp()
   const showIssues = useShowIssues()
   // Searching narrows every section on this page, the period report and the downloads.
   const [search, setSearch] = useState(NO_SEARCH)
+  const [showAllResults, setShowAllResults] = useState(false)
   const text = search.text.trim().toLowerCase()
   const issues = all.filter(
     (i) =>
@@ -695,6 +698,18 @@ function Reports() {
           <p className="hotspot-note" style={{ margin: '12px 0 0' }}>
             Showing <b>{issues.length}</b> of {all.length} issues for {scope}.
           </p>
+        )}
+        {searching && issues.length > 0 && (
+          <div className="search-results">
+            {(showAllResults ? issues : issues.slice(0, RESULTS_SHOWN)).map((issue) => (
+              <IssueRow key={issue.id} issue={issue} />
+            ))}
+            {issues.length > RESULTS_SHOWN && (
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowAllResults(!showAllResults)}>
+                {showAllResults ? 'Show fewer' : `Show all ${issues.length} results`}
+              </button>
+            )}
+          </div>
         )}
       </div>
       {searching && !issues.length ? (

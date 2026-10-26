@@ -788,3 +788,5 @@ button.st-banner-card:hover { transform: translateY(-3px); border-color: rgba(95
   .st-report-actions .btn { flex: 1; justify-content: center; }
   .progress-steps li { font-size: 10px; }
 }
+.search-results { margin-top: 14px; display: flex; flex-direction: column; }
+.search-results > .btn { align-self: flex-start; margin-top: 4px; }
