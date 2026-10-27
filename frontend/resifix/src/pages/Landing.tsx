@@ -108,13 +108,6 @@ export function Landing() {
                     {stage}
                   </li>
                 ))}
-                {/* The other possible ending: the student says it's not fixed and it is re-opened. */}
-                <li className="alt" style={{ animationDelay: `${0.4 + TICKET_STAGES.length * 0.35}s` }}>
-                  <span className="step-dot">
-                    <Icon name="refresh" />
-                  </span>
-                  Not fixed
-                </li>
               </ol>
             </div>
           </div>
