@@ -1,6 +1,5 @@
 import { useState, type ChangeEvent } from 'react'
 import { Icon } from './Icon'
-import { ProgressSteps } from './ProgressSteps'
 import { useApp } from '../context/appContext'
 import { PasswordInput } from './PasswordInput'
 import {
@@ -86,9 +85,6 @@ function DetailModal({ issue, close }: IssueModalProps) {
         <span className="status-pill status-submitted">
           <Icon name={category.icon} /> {category.name}
         </span>
-      </div>
-      <div style={{ margin: '4px 0 16px' }}>
-        <ProgressSteps issue={issue} />
       </div>
       {issue.reopened ? (
         <div className="field-error" style={{ margin: '0 0 10px', fontWeight: 700 }}>
