@@ -52,6 +52,17 @@ export function recommendStaff(issue: Issue, staff: Staff[]): Staff | undefined 
   return pool.reduce<Staff | undefined>((best, s) => (!best || s.openJobs < best.openJobs ? s : best), undefined)
 }
 
+// A student can edit or cancel their own report until the admin receives it (the server checks too).
+export const canEditReport = (issue: Issue, auth: Auth) =>
+  auth.role === 'student' && issue.studentId === auth.studentId && issue.status === 'Submitted'
+
+// Why maintenance marked the job Not Resolved (their comment), while it is still in that state.
+export function notResolvedReason(issue: Issue): { date: string; reason: string } | undefined {
+  if (issue.status !== 'Not Resolved') return undefined
+  const entry = [...issue.history].reverse().find((h) => h.status === 'Not Resolved')
+  return entry ? { date: entry.date, reason: entry.note } : undefined
+}
+
 const NOT_FIXED_NOTE = 'Student reported the issue is NOT fixed: '
 
 // The most recent time a student sent the issue back, with their reason.

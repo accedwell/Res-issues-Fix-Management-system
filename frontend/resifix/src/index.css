@@ -786,3 +786,38 @@ button.st-banner-card:hover { transform: translateY(-3px); border-color: rgba(95
 }
 .search-results { margin-top: 14px; display: flex; flex-direction: column; }
 .search-results > .btn { align-self: flex-start; margin-top: 4px; }
+
+/* Why maintenance could not fix a job: a line on the report row, and a box in its details. */
+.not-resolved-note { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 12px; font-weight: 600; color: var(--bad); }
+.not-resolved-note svg { width: 13px; height: 13px; flex: 0 0 auto; }
+.not-resolved-box { margin: 0 0 14px; padding: 12px 14px; border-radius: var(--r); background: var(--bad-bg); border: 1px solid rgba(255, 122, 122, .3); }
+.not-resolved-box b { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--bad); }
+.not-resolved-box b svg { width: 14px; height: 14px; }
+.not-resolved-box p { margin: 6px 0 4px; font-size: 13px; color: var(--ink); line-height: 1.5; }
+.not-resolved-box span { font-size: 11.5px; color: var(--ink-soft); }
+
+/* Report form: open reports of the same kind in the same block, shown before submitting. */
+.already-reported { margin-top: 14px; padding: 14px 16px; border-radius: var(--r); background: var(--warn-bg); border: 1px solid rgba(246, 189, 85, .35); }
+.already-reported > b { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--warn); }
+.already-reported > b svg { width: 16px; height: 16px; }
+.already-reported ul { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.already-reported li { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--r-sm); background: rgba(5, 15, 38, .35); font-size: 13px; }
+.already-reported li.same-room { box-shadow: inset 3px 0 0 var(--warn); }
+.already-reported li .ref { color: var(--ink-soft); font-size: 11.5px; font-weight: 700; margin-right: 4px; }
+.already-reported li small { color: var(--ink-soft); font-size: 11.5px; }
+.already-reported .mine-tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 800; background: rgba(34, 199, 169, .16); color: var(--mint-soft); }
+.already-reported p { margin: 0; font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
+
+/* Report photo: preview on the form, and the real photo in the report details. */
+.st-photo { display: flex; gap: 14px; align-items: center; padding: 12px; border-radius: var(--r); border: 1px solid var(--border-soft); background: var(--card); }
+.st-photo img { width: 112px; height: 84px; object-fit: cover; border-radius: var(--r-sm); flex: 0 0 auto; }
+.st-photo > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.st-photo b { font-size: 13px; }
+.st-photo small { font-size: 11.5px; color: var(--ink-soft); }
+.st-photo-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.st-photo-actions input { display: none; }
+.issue-photo { display: block; margin: 0 0 14px; border-radius: var(--r); overflow: hidden; border: 1px solid var(--border-soft); background: var(--navy-deep); }
+.issue-photo img { display: block; width: 100%; max-height: 280px; object-fit: contain; }
+.issue-photo-loading { height: 160px; animation: blink 1.4s infinite; background: var(--card); }
+.issue-photo-note { font-size: 12px; color: var(--ink-soft); }
+.field .st-photo-actions label { display: inline-flex; margin: 0; font-size: inherit; color: inherit; }

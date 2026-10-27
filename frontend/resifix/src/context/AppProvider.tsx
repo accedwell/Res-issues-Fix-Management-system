@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppContext, type AppState } from './appContext'
 import {
   apiAddCategory, apiAddUser, apiAssignIssue, apiReceiveIssue, apiConfirmResolution, apiCreateIssue, apiEditCategory, apiMe,
-  apiReadAllNotifications, apiReadNotification, apiRemoveCategory, apiRemoveUser, apiReportNotFixed, apiSetSetting,
+  apiReadAllNotifications, apiReadNotification, apiRemoveCategory, apiRemoveUser, apiReportNotFixed, apiEditIssue, apiCancelIssue, apiSetSetting,
   apiUpdateProgress, clearToken, connectLiveUpdates, fetchCategories, fetchIssues, fetchNotifications, fetchSettings,
   fetchStaff, fetchUsers, getToken, type ApiUser, type Topic,
 } from '../api'
@@ -226,6 +226,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     confirmResolution: (issue, rating, comment) =>
       save(() => apiConfirmResolution(issue.id, rating, comment), ISSUE_TOPICS, 'Thanks for confirming — the report is now closed.'),
+    editReport: (issue, changes) => save(() => apiEditIssue(issue.id, changes), ISSUE_TOPICS, `${issue.ref} was updated.`),
+    cancelReport: (issue) => save(() => apiCancelIssue(issue.id), ISSUE_TOPICS, `${issue.ref} was cancelled.`),
     reportNotFixed: (issue, reason) =>
       save(() => apiReportNotFixed(issue.id, reason), ISSUE_TOPICS, 'Issue re-opened — maintenance has been notified.'),
     addUser: (user) => save(() => apiAddUser(user), ['users', 'staff'], `${user.name} has been added.`),

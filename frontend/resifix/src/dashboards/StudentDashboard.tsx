@@ -3,9 +3,11 @@ import { EmptyState, IssueRow, StatRow } from '../components/common'
 import { Icon } from '../components/Icon'
 import { ProgressSteps } from '../components/ProgressSteps'
 import { useApp } from '../context/appContext'
+import { fetchSimilarIssues } from '../api'
+import { preparePhoto, type PreparedPhoto } from '../photo'
 import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, OVERDUE_AFTER_DAYS, PRIORITIES } from '../data/constants'
 import { canReportNotFixed, formatDate, isForUser, isOpen, matchesView, stop } from '../utils'
-import type { Issue, Priority } from '../types'
+import type { Issue, Priority, SimilarIssue } from '../types'
 
 export function StudentDashboard({ tab }: { tab: string }) {
   if (tab === 'report') return <ReportIssue />
@@ -209,6 +211,57 @@ const PRIORITY_HELP: Record<Priority, string> = {
   Urgent: 'Safety risk, flooding, no power',
 }
 
+// While a student fills in the form: open reports of the same kind in the same block, so they can
+// see it is already known before reporting it again. They can still submit if it's a different problem.
+function AlreadyReported({ category, residence, room }: { category: string; residence: string; room: string }) {
+  const { catInfo } = useApp()
+  const [similar, setSimilar] = useState<SimilarIssue[]>([])
+
+  useEffect(() => {
+    if (!category) return
+    let current = true
+    // Wait until the student stops typing the room before asking.
+    const timer = setTimeout(() => {
+      fetchSimilarIssues(category, residence, room)
+        .then((found) => current && setSimilar(found))
+        .catch(() => current && setSimilar([]))
+    }, 400)
+    return () => {
+      current = false
+      clearTimeout(timer)
+    }
+  }, [category, residence, room])
+
+  const shown = category ? similar : []
+  if (!shown.length) return null
+  const inRoom = shown.some((s) => s.sameRoom)
+
+  return (
+    <div className="already-reported" role="status">
+      <b>
+        <Icon name="flag" />
+        {inRoom
+          ? `This may already be reported in ${room.trim()}`
+          : `${plural(shown.length, 'open report', 'open reports')} for ${catInfo(category).name} in ${residence}`}
+      </b>
+      <ul>
+        {shown.map((s) => (
+          <li key={s.ref} className={s.sameRoom ? 'same-room' : ''}>
+            <span>
+              <span className="ref">{s.ref}</span> {s.title}
+              {s.mine && <span className="mine-tag">Your report</span>}
+            </span>
+            <small>
+              {s.room} · reported {formatDate(s.dateReported)} · {s.status}
+            </small>
+          </li>
+        ))}
+      </ul>
+      <p>If it's the same problem, there's no need to report it again — maintenance already knows. If it's a different problem, carry on.</p>
+    </div>
+  )
+}
+
 function ReportIssue() {
   const { categories, addIssue, setTab, filters } = useApp()
   const preset = categories.some((c) => c.key === filters.category) ? filters.category : ''
@@ -220,13 +273,27 @@ function ReportIssue() {
     room: '',
     description: '',
   })
-  const [photoName, setPhotoName] = useState('')
+  const [photo, setPhoto] = useState<PreparedPhoto | null>(null)
+  const [photoError, setPhotoError] = useState('')
+  const [preparing, setPreparing] = useState(false)
+
+  const choosePhoto = async (file: File | undefined) => {
+    if (!file) return
+    setPhotoError('')
+    setPreparing(true)
+    try {
+      setPhoto(await preparePhoto(file))
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'That photo could not be used.')
+    }
+    setPreparing(false)
+  }
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const field =
     (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-      setForm({ ...form, [key]: e.target.value })
+      setForm((f) => ({ ...f, [key]: e.target.value }))
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -235,7 +302,7 @@ function ReportIssue() {
     setError('')
     setBusy(true)
     // On success the app moves to My Reports; on failure the form stays filled in so it can be retried.
-    if (!(await addIssue({ ...form, photo: !!photoName }))) setBusy(false)
+    if (!(await addIssue({ ...form, photo: photo?.upload }))) setBusy(false)
   }
 
   const days = OVERDUE_AFTER_DAYS[form.priority]
@@ -316,6 +383,7 @@ function ReportIssue() {
               <input type="text" value={form.room} onChange={field('room')} placeholder="e.g. 204 or Common Room" required />
             </div>
           </div>
+          <AlreadyReported category={form.category} residence={form.residence} room={form.room} />
         </section>
 
         <section className="st-step">
@@ -343,14 +411,34 @@ function ReportIssue() {
 
           <div className="field" style={{ marginTop: 14 }}>
             <label>Photo (optional)</label>
-            <label className="st-drop">
-              <Icon name="image" />
-              <span className="st-drop-text">
-                <b>{photoName || 'Add a photo of the problem'}</b>
-                <small>{photoName ? 'Tap to choose a different photo' : 'Helps maintenance bring the right tools (demo — no file is uploaded)'}</small>
-              </span>
-              <input type="file" accept="image/*" onChange={(e) => setPhotoName(e.target.files?.[0]?.name || '')} />
-            </label>
+            {photo ? (
+              <div className="st-photo">
+                <img src={photo.preview} alt="Your photo of the problem" />
+                <div>
+                  <b>Photo added</b>
+                  <small>Maintenance will see this with your report.</small>
+                  <span className="st-photo-actions">
+                    <label className="btn btn-ghost btn-sm">
+                      Change
+                      <input type="file" accept="image/*" onChange={(e) => choosePhoto(e.target.files?.[0])} />
+                    </label>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPhoto(null)}>
+                      <Icon name="x" /> Remove
+                    </button>
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <label className="st-drop">
+                <Icon name="image" />
+                <span className="st-drop-text">
+                  <b>{preparing ? 'Preparing photo…' : 'Add a photo of the problem'}</b>
+                  <small>Take one or choose from your gallery. It helps maintenance bring the right tools.</small>
+                </span>
+                <input type="file" accept="image/*" disabled={preparing} onChange={(e) => choosePhoto(e.target.files?.[0])} />
+              </label>
+            )}
+            {photoError && <div className="field-error">{photoError}</div>}
           </div>
         </section>
 
@@ -359,7 +447,7 @@ function ReportIssue() {
           <button className="btn btn-ghost" type="button" onClick={() => setTab('overview')}>
             Cancel
           </button>
-          <button className="btn btn-primary btn-lg" type="submit" disabled={busy}>
+          <button className="btn btn-primary btn-lg" type="submit" disabled={busy || preparing}>
             <Icon name="check" /> {busy ? 'Submitting…' : 'Submit report'}
           </button>
         </div>
@@ -369,11 +457,17 @@ function ReportIssue() {
 }
 
 function MyReports() {
-  const { setModal, filters, setFilters } = useApp()
+  const { setModal, filters, setFilters, catInfo } = useApp()
   const startReport = useStartReport()
   const all = useMyIssues()
   const view = REPORT_VIEWS.some((v) => v.key === filters.view) ? filters.view : 'all'
-  const mine = all.filter((issue) => matchesView(issue, view))
+  // Search by title, reference number, room or category.
+  const search = filters.search.trim().toLowerCase()
+  const mine = all.filter(
+    (issue) =>
+      matchesView(issue, view) &&
+      (!search || [issue.title, issue.ref, issue.room, catInfo(issue.category).name].join(' ').toLowerCase().includes(search)),
+  )
 
   return (
     <div className="card">
@@ -384,7 +478,15 @@ function MyReports() {
         </button>
       </div>
       <p className="card-sub">{plural(all.length, 'report', 'reports')} submitted so far. Tap a report to see its full progress.</p>
-      <div className="toolbar" role="group" aria-label="Show">
+      <div className="toolbar">
+        <input
+          type="search"
+          placeholder="Search by title, reference or room..."
+          value={filters.search}
+          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+          aria-label="Search my reports"
+          style={{ flex: '1 1 220px' }}
+        />
         {REPORT_VIEWS.map((v) => (
           <button
             key={v.key}
@@ -418,6 +520,11 @@ function MyReports() {
                     Confirm
                   </button>
                 </span>
+              ) : issue.status === 'Submitted' ? (
+                // Until the admin receives it, fixing the report is more useful than chasing it.
+                <button className="btn btn-ghost btn-sm" onClick={stop(() => setModal({ type: 'editReport', issueId: issue.id }))}>
+                  Edit
+                </button>
               ) : canReportNotFixed(issue) ? (
                 <button
                   className="btn btn-ghost btn-sm"
@@ -431,9 +538,15 @@ function MyReports() {
         ))
       ) : (
         <EmptyState
-          icon="list"
-          title={all.length ? 'Nothing in this view' : 'No reports yet'}
-          sub={all.length ? 'Try another filter above.' : 'Use "Report an Issue" to submit your first report.'}
+          icon={search ? 'search' : 'list'}
+          title={!all.length ? 'No reports yet' : search ? 'No reports match your search' : 'Nothing in this view'}
+          sub={
+            !all.length
+              ? 'Use "Report an Issue" to submit your first report.'
+              : search
+                ? 'Try other words, or search by reference number like ISS-2026-00125.'
+                : 'Try another filter above.'
+          }
         />
       )}
     </div>

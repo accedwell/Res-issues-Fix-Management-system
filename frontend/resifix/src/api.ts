@@ -1,4 +1,4 @@
-import type { AppNotification, Category, Issue, NewIssue, Priority, Role, Setting, Staff, Status } from './types'
+import type { AppNotification, Category, Issue, NewIssue, Priority, Role, Setting, SimilarIssue, Staff, Status } from './types'
 
 // Backend address. By default it is the same computer the page was opened from, on port 5000,
 // so the app also works from a phone on the same Wi-Fi. Override with VITE_API_URL in a .env file.
@@ -121,7 +121,24 @@ export const fetchSettings = async () => (await request<{ settings: Setting[] }>
 
 // ===== Issues =====
 
+// The report's photo as a link the page can show. Loaded with the login token, like every request.
+export async function fetchIssuePhoto(id: string): Promise<string> {
+  const token = getToken()
+  const res = await fetch(`${API_URL}/issues/${id}/photo`, { headers: token ? { Authorization: 'Bearer ' + token } : {} })
+  if (!res.ok) throw new Error('The photo could not be loaded.')
+  return URL.createObjectURL(await res.blob())
+}
+
+export const fetchSimilarIssues = async (category: string, residence: string, room: string) =>
+  (
+    await request<{ similar: SimilarIssue[] }>(
+      'GET',
+      `/issues/similar?${new URLSearchParams({ category, residence, room })}`,
+    )
+  ).similar
 export const apiCreateIssue = async (issue: NewIssue) => (await request<{ issue: Issue }>('POST', '/issues', issue)).issue
+export const apiEditIssue = (id: string, changes: Omit<NewIssue, 'photo'>) => request('PATCH', `/issues/${id}`, changes)
+export const apiCancelIssue = (id: string) => request('DELETE', `/issues/${id}`)
 export const apiReceiveIssue = (id: string) => request('POST', `/issues/${id}/receive`)
 export const apiAssignIssue = (id: string, staffId: string, priority: Priority) =>
   request('POST', `/issues/${id}/assign`, { staffId, priority })

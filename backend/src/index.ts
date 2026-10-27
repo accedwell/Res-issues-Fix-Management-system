@@ -27,7 +27,8 @@ const isAllowedOrigin = (origin: string) =>
   allowedOrigins.includes(origin) || (process.env.NODE_ENV !== "production" && LOCAL_NETWORK.test(origin));
 
 app.use(cors({ origin: (origin, done) => done(null, !origin || isAllowedOrigin(origin)) }));
-app.use(express.json());
+// Room for one report photo (up to 5 MB, sent as base64).
+app.use(express.json({ limit: "8mb" }));
 app.use(broadcastChanges);
 
 // Live updates for every logged-in browser.

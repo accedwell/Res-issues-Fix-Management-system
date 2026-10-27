@@ -13,6 +13,17 @@ export type Status =
 
 export type Priority = 'Low' | 'Normal' | 'High' | 'Urgent'
 
+// An open report of the same kind in the same block, shown before a student submits (no names).
+export interface SimilarIssue {
+  ref: string
+  title: string
+  status: Status
+  room: string
+  dateReported: string
+  sameRoom: boolean
+  mine: boolean
+}
+
 export interface Category {
   key: string
   name: string
@@ -70,7 +81,13 @@ export interface NewIssue {
   residence: string
   room: string
   description: string
-  photo: boolean
+  photo?: PhotoUpload
+}
+
+// A report photo on its way to the server: data is base64 without the "data:" prefix.
+export interface PhotoUpload {
+  mimeType: string
+  data: string
 }
 
 // Sent either to one person (userId) or to everyone with a role, e.g. all residence admins.
@@ -127,7 +144,7 @@ export interface NavItem {
 }
 
 export type Modal =
-  | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed'; issueId: string }
+  | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed' | 'editReport' | 'cancelReport'; issueId: string }
   | { type: 'addUser' }
   | { type: 'removeUser'; userId: string }
   | { type: 'addCategory' }

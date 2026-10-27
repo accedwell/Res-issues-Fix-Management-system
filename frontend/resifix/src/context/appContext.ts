@@ -36,6 +36,8 @@ export interface AppState {
   updateProgress: (issue: Issue, status: Status, note: string) => Promise<boolean>
   confirmResolution: (issue: Issue, rating: number | null, comment: string) => Promise<boolean>
   reportNotFixed: (issue: Issue, reason: string) => Promise<boolean>
+  editReport: (issue: Issue, changes: Omit<NewIssue, 'photo'>) => Promise<boolean>
+  cancelReport: (issue: Issue) => Promise<boolean>
   addUser: (user: NewUserInput) => Promise<boolean>
   removeUser: (userId: string) => Promise<boolean>
   addCategory: (name: string, icon: string) => Promise<boolean>

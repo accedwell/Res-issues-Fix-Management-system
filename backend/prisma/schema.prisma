@@ -139,6 +139,7 @@ model MaintenanceIssue {
   block    ResidenceBlock @relation(fields: [blockId], references: [id], onDelete: Restrict)
   history  IssueHistory[]
   feedback IssueFeedback?
+  photo    IssuePhoto?
 
   @@index([status])
   @@index([priority])
@@ -149,6 +150,20 @@ model MaintenanceIssue {
   @@index([reportedAt])
   @@index([status, priority])
   @@map("maintenance_issues")
+}
+
+// The photo a student attached to a report (one per report), stored in the database.
+model IssuePhoto {
+  id        String   @id @default(cuid())
+  issueId   String   @unique @map("issue_id")
+  mimeType  String   @map("mime_type")
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue MaintenanceIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@map("issue_photos")
 }
 
 model IssueHistory {
