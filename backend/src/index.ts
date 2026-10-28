@@ -3,7 +3,7 @@ import express from "express";
 import cors from "cors";
 import "dotenv/config";
 import prisma from "./lib/prisma.js";
-import { broadcastChanges, eventsHandler } from "./lib/events.js";
+import { broadcast, broadcastChanges, eventsHandler } from "./lib/events.js";
 import { errorHandler } from "./lib/http.js";
 import { authRouter } from "./routes/auth.js";
 import { categoriesRouter } from "./routes/categories.js";
@@ -11,6 +11,7 @@ import { issuesRouter } from "./routes/issues.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { settingsRouter } from "./routes/settings.js";
 import { usersRouter } from "./routes/users.js";
+import { alertOverdueReports } from "./services/issueWorkflow.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -74,3 +75,17 @@ app.listen(Number(PORT), "0.0.0.0", () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log("Data is stored in PostgreSQL (DATABASE_URL in .env).");
 });
+
+// Once an hour (and at start-up), alert students whose reports have gone overdue. Each report
+// alerts its student only once.
+const checkOverdue = () =>
+  alertOverdueReports()
+    .then((sent) => {
+      if (sent) {
+        console.log(`Sent ${sent} overdue alert(s) to students.`);
+        broadcast(["notifications"]);
+      }
+    })
+    .catch((err) => console.error("Overdue check failed:", err));
+void checkOverdue();
+setInterval(checkOverdue, 60 * 60 * 1000);

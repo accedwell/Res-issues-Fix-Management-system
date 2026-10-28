@@ -275,6 +275,10 @@ footer.site .brand { font-size: 15px; }
   transition: border-color .2s, box-shadow .2s, background .2s;
 }
 .field input::placeholder, .field textarea::placeholder, .toolbar input::placeholder { color: var(--ink-faint); }
+/* Fixed values from the student's account (block, room): readable but not editable. */
+.field input.locked, .field input.locked:hover { border-style: dashed; border-color: var(--border); background: rgba(17, 38, 79, .45); color: var(--ink-soft); cursor: not-allowed; }
+.st-check { display: flex; align-items: center; gap: 8px; margin: -4px 0 4px; font-size: 13px; color: var(--ink-soft); cursor: pointer; }
+.st-check input { width: 16px; height: 16px; accent-color: var(--mint); }
 .field input:hover, .field select:hover, .field textarea:hover { border-color: #2b4a85; }
 .field input:focus, .field select:focus, .field textarea:focus, .toolbar input:focus, .toolbar select:focus {
   outline: none; border-color: var(--mint); background: rgba(5, 15, 38, .9); box-shadow: 0 0 0 4px rgba(34, 199, 169, .16);
@@ -343,13 +347,16 @@ body.in-app #root { display: flex; min-height: 100vh; }
 .card .card-sub { font-size: 13px; color: var(--ink-soft); margin: 0 0 16px; }
 .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
 .card-head h2 { margin: 0; }
+.card-head .card-sub { margin: 0; }
+/* A head with only a button keeps the button on the right. */
+.card-head > button:only-child { margin-left: auto; }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .toolbar input, .toolbar select { width: auto; padding: 9px 12px; font-size: 13px; border-radius: 10px; }
 .toolbar select { padding-right: 34px; }
 
 /* Issue rows */
 .issue-row {
-  display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 14px; align-items: center;
+  display: grid; grid-template-columns: auto 1fr auto auto; gap: 14px; align-items: center;
   padding: 14px; margin-bottom: 8px; border-radius: var(--r); background: var(--card); border: 1px solid transparent; cursor: pointer;
   transition: transform .2s var(--ease), border-color .2s, background .2s, box-shadow .2s;
 }
@@ -368,16 +375,18 @@ body.in-app #root { display: flex; min-height: 100vh; }
 .status-submitted { background: var(--slate-bg); color: var(--slate); }
 .status-received { background: rgba(77, 143, 240, .16); color: #9cc0ff; }
 .status-assigned { background: rgba(34, 199, 169, .15); color: var(--mint-soft); }
-.status-inprogress { background: var(--warn-bg); color: var(--warn); }
+/* Sky blue: sits between the brand blue (Received) and mint (Assigned), so it fits but stays distinct. */
+.status-inprogress { background: rgba(77, 200, 240, .14); color: #6fd3f5; }
 .status-inprogress::before { animation: blink 1.4s infinite; }
 .status-notresolved { background: var(--bad-bg); color: var(--bad); }
 .status-resolved { background: var(--good-bg); color: var(--good); }
 .status-closed { background: rgba(201, 212, 238, .1); color: #c9d4ee; }
-.priority-pill { font-size: 11px; font-weight: 800; padding: 4px 9px; border-radius: 7px; white-space: nowrap; }
-.priority-low { background: var(--slate-bg); color: var(--slate); }
-.priority-normal { background: rgba(77, 143, 240, .16); color: #9cc0ff; }
-.priority-high { background: var(--warn-bg); color: var(--warn); }
-.priority-urgent { background: var(--bad-bg); color: var(--bad); box-shadow: inset 0 0 0 1px rgba(255, 122, 122, .35); }
+/* Same rounded shape as the status pills, but outlined so the two are not mixed up. Only shown in the report details. */
+.priority-pill { display: inline-flex; align-items: center; padding: 4px 11px; border-radius: 999px; border: 1px solid currentColor; background: transparent; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+.priority-low { color: var(--ink-soft); border-color: var(--border); }
+.priority-normal { color: var(--mint-soft); border-color: rgba(34, 199, 169, .45); }
+.priority-high { color: var(--warn); border-color: rgba(246, 189, 85, .5); }
+.priority-urgent { color: var(--bad); border-color: rgba(255, 122, 122, .55); background: var(--bad-bg); }
 
 /* ===== Empty states, modals, lists ===== */
 .empty-state { text-align: center; padding: 48px 20px; color: var(--ink-soft); }
@@ -461,8 +470,8 @@ table.simple tbody tr:hover td { background: rgba(77, 143, 240, .06); }
   .menu-toggle { display: inline-flex; }
   .topbar, .content { padding-left: 16px; padding-right: 16px; }
   .issue-row { grid-template-columns: auto 1fr auto; }
-  .issue-row > .priority-pill, .issue-row > .icon-inline { display: none; }
-  .issue-row > :nth-child(5) { grid-column: 1 / -1; justify-self: end; }
+  .issue-row > .icon-inline { display: none; }
+  .issue-row > :nth-child(4) { grid-column: 1 / -1; justify-self: end; }
 }
 @media (max-width: 640px) {
   .container { padding: 0 16px; }
@@ -530,6 +539,8 @@ table.simple tbody tr:hover td { background: rgba(77, 143, 240, .06); }
 .bell-panel { position: absolute; right: 0; top: calc(100% + 10px); width: 360px; max-width: calc(100vw - 32px); background: var(--panel); border: 1px solid var(--border); border-top: 3px solid var(--mint); border-radius: 14px; box-shadow: 0 18px 40px rgba(0, 0, 0, .45); z-index: 90; overflow: hidden; }
 .bell-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .bell-head b { font-size: 14px; }
+.bell-clear { padding: 0; border: none; background: none; color: var(--mint-soft); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.bell-clear:hover { text-decoration: underline; }
 .bell-link { background: none; border: none; padding: 0; color: var(--mint-soft); font-size: 12px; font-weight: 700; cursor: pointer; }
 .bell-link:hover { text-decoration: underline; }
 .bell-list { list-style: none; margin: 0; padding: 6px; max-height: 360px; overflow-y: auto; }
@@ -545,13 +556,7 @@ table.simple tbody tr:hover td { background: rgba(77, 143, 240, .06); }
 .bell-foot { display: block; width: 100%; padding: 11px; border: none; border-top: 1px solid var(--border); background: transparent; color: var(--mint-soft); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
 .bell-foot:hover { background: rgba(34, 199, 169, .08); }
 
-/* Live connection indicator and loading screen */
-.live-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); padding: 4px 9px; border: 1px solid var(--border); border-radius: 20px; }
-.live-status.on { color: var(--mint-soft); border-color: rgba(34, 199, 169, .4); }
-.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
-.live-status.on .live-dot { background: var(--mint); box-shadow: 0 0 0 3px rgba(34, 199, 169, .2); animation: live-pulse 2s infinite; }
-@keyframes live-pulse { 50% { box-shadow: 0 0 0 6px rgba(34, 199, 169, 0); } }
-@media (max-width: 640px) { .live-status { display: none; } }
+/* Loading screen */
 .app-loading { min-height: 100vh; display: flex; align-items: center; justify-content: center; color: var(--ink-soft); font-size: 14px; font-weight: 600; }
 
 /* Overdue issues */
@@ -621,7 +626,8 @@ table.simple tbody tr:hover td { background: rgba(77, 143, 240, .06); }
 .star-bars .team-bar { margin-top: 0; }
 .star-bars .team-bar > span { background: var(--warn); }
 .star-bars .team-bar > span.low { background: var(--bad); }
-.staff-rating { display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 10px; background: var(--card); font-size: 13px; }
+.staff-rating { display: flex; justify-content: space-between; gap: 10px; width: 100%; padding: 9px 12px; border: 1px solid transparent; border-radius: 10px; background: var(--card); color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; transition: border-color .2s, background .2s; }
+.staff-rating:hover { border-color: rgba(95, 224, 198, .35); background: var(--card-hover); }
 .staff-rating > span:last-child { color: var(--ink-soft); font-size: 12px; }
 .staff-rating b { color: var(--warn); }
 .staff-rating b.low { color: var(--bad); }
@@ -765,6 +771,8 @@ button.st-banner-card:hover { transform: translateY(-3px); border-color: rgba(95
   border: 1.5px dashed var(--border); color: var(--ink-soft); transition: border-color .2s, background .2s;
 }
 .st-drop:hover { border-color: var(--mint); background: rgba(34, 199, 169, .06); }
+.field .st-drop { cursor: default; }
+.camera-view { display: block; width: 100%; max-height: 60vh; border-radius: var(--r); background: #000; object-fit: cover; }
 .st-drop > .icon-inline { flex: 0 0 auto; color: var(--mint-soft); }
 .st-drop > .icon-inline svg { width: 26px; height: 26px; }
 .st-drop-text { display: flex; flex-direction: column; gap: 2px; }
@@ -820,4 +828,7 @@ button.st-banner-card:hover { transform: translateY(-3px); border-color: rgba(95
 .issue-photo img { display: block; width: 100%; max-height: 280px; object-fit: contain; }
 .issue-photo-loading { height: 160px; animation: blink 1.4s infinite; background: var(--card); }
 .issue-photo-note { font-size: 12px; color: var(--ink-soft); }
-.field .st-photo-actions label { display: inline-flex; margin: 0; font-size: inherit; color: inherit; }
+/* The photo buttons are labels (so they open the file picker); undo the form-label look. */
+.field .st-photo-actions label.btn { display: inline-flex; margin: 0; font-size: 13.5px; color: var(--ink); cursor: pointer; }
+.field .st-photo-actions label.btn-sm { font-size: 12.5px; }
+.field .st-photo-actions label.btn-primary { color: #04122b; }

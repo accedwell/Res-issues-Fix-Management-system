@@ -8,8 +8,11 @@ export const ROLES: Role[] = ["student", "admin", "maintenance", "sysadmin"];
 export const STATUSES: Status[] = ["Submitted", "Received", "Assigned", "In Progress", "Not Resolved", "Resolved", "Closed"];
 export const PRIORITIES: Priority[] = ["Low", "Normal", "High", "Urgent"];
 export const DONE_STATUSES: Status[] = ["Resolved", "Closed"];
-// Days an issue may stay open before it counts as overdue (same as the frontend).
-export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 1, High: 3, Normal: 7, Low: 14 };
+// Places in a block that belong to nobody. Besides their own room, students can only report these,
+// so nobody can report a problem in another student's room. Keep in step with the app's list.
+export const SHARED_PLACES = ["Hallway", "Bathroom", "Kitchen", "Common room", "Laundry room", "Stairs / entrance", "Outside the block"];
+// Every report, whatever its priority, is overdue once it is still open after 2 days.
+export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 2, High: 2, Normal: 2, Low: 2 };
 
 export interface User {
   id: string;

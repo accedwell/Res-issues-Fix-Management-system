@@ -71,6 +71,21 @@ export async function insertUser(user: User): Promise<User> {
   return toUser(row);
 }
 
+// The details the system administrator may correct: a student's block and room, a staff member's job.
+export async function updateUserDetails(id: string, details: { block?: string; room?: string; specialization?: string }): Promise<User> {
+  const block = details.block ? await prisma.residenceBlock.findUnique({ where: { name: details.block } }) : null;
+  const row = await prisma.user.update({
+    where: { id },
+    data: {
+      ...(block ? { blockId: block.id } : {}),
+      ...(details.room !== undefined ? { roomNumber: details.room } : {}),
+      ...(details.specialization !== undefined ? { specialization: details.specialization } : {}),
+    },
+    include: withBlock,
+  });
+  return toUser(row);
+}
+
 export async function updatePassword(id: string, passwordHash: string): Promise<void> {
   await prisma.user.update({ where: { id }, data: { passwordHash } });
 }

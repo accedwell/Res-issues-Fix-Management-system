@@ -99,6 +99,12 @@ const ICONS: Record<string, ReactNode> = {
       <polyline points="21 15 16 10 5 21" />
     </>
   ),
+  camera: (
+    <>
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </>
+  ),
   droplet: <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />,
   zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
   shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,

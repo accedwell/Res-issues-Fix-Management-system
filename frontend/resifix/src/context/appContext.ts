@@ -12,9 +12,7 @@ export interface AppState {
   restoring: boolean
   // False until the first load of data after logging in has finished.
   ready: boolean
-  // Whether the live-update connection to the server is open.
-  live: boolean
-  login: (name: string, role: Role, userId: string) => void
+  login: (name: string, role: Role, userId: string, home?: { block?: string; room?: string }) => void
   logout: () => void
   tabs: Record<Role, string>
   setTab: (tab: string) => void
@@ -40,6 +38,7 @@ export interface AppState {
   cancelReport: (issue: Issue) => Promise<boolean>
   addUser: (user: NewUserInput) => Promise<boolean>
   removeUser: (userId: string) => Promise<boolean>
+  editUser: (userId: string, details: { block?: string; room?: string; specialization?: string }) => Promise<boolean>
   addCategory: (name: string, icon: string) => Promise<boolean>
   editCategory: (key: string, name: string, icon: string) => Promise<boolean>
   removeCategory: (key: string) => Promise<boolean>

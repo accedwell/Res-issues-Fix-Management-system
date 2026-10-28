@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { EmptyState, IssueRow, StatRow } from '../components/common'
 import { ActivityFeed } from '../components/ActivityFeed'
 import { Icon } from '../components/Icon'
@@ -6,7 +7,7 @@ import { TrendChart } from '../components/TrendChart'
 import { useApp } from '../context/appContext'
 import { downloadIssuesCsv } from '../exportCsv'
 import { buildReportHtml, customPeriod, issuesInPeriod, monthPeriod, openReport } from '../periodReport'
-import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, STATUSES, STATUS_CLASS } from '../data/constants'
+import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, STATUSES } from '../data/constants'
 import { daysOpen, formatDate, initials, isOpen, isOverdue, lastReopen, matchesView, sameRoom, stop } from '../utils'
 import type { Filters, Issue } from '../types'
 
@@ -119,11 +120,45 @@ function Overview() {
   )
 }
 
+interface GivenFeedback {
+  issue: Issue
+  rating: number | null
+  comment: string
+  date: string
+}
+
+// One student's feedback on a fix. Shows the reference only, never the student's name.
+function FeedbackItem({ r, showFixer, onOpen }: { r: GivenFeedback; showFixer: boolean; onOpen: () => void }) {
+  return (
+    <li>
+      <button className={'hotspot-row' + (r.rating !== null && r.rating <= 2 ? ' low-rating' : '')} onClick={onOpen}>
+        <span className="hotspot-head">
+          <b>
+            {r.issue.ref} · {r.issue.title}
+          </b>
+          {r.rating !== null ? (
+            <span className={'rating-pill' + (r.rating <= 2 ? ' low' : '')}>{r.rating}★</span>
+          ) : (
+            <span className="hotspot-note">Not rated</span>
+          )}
+        </span>
+        <span className="reopen-reason">{r.comment ? `“${r.comment}”` : 'No comment'}</span>
+        <span className="hotspot-note">
+          {formatDate(r.date)}
+          {showFixer && r.issue.assignedToName ? ' · fixed by ' + r.issue.assignedToName : ''}
+        </span>
+      </button>
+    </li>
+  )
+}
+
 // Ratings students gave when confirming a fix: overall, per staff member, and the latest comments.
 function StudentFeedback({ issues }: { issues: Issue[] }) {
   const { setModal } = useApp()
+  // The staff member whose feedback is open in the pop-up.
+  const [openStaff, setOpenStaff] = useState<string | null>(null)
   // Everything students left when confirming. Rating is optional, so some only have a comment.
-  const given = issues
+  const given: GivenFeedback[] = issues
     .filter((i) => i.feedback)
     .map((i) => ({
       issue: i,
@@ -146,6 +181,14 @@ function StudentFeedback({ issues }: { issues: Issue[] }) {
   const staffRatings = [...byStaff.entries()]
     .map(([name, list]) => ({ name, count: list.length, average: list.reduce((a, b) => a + b, 0) / list.length }))
     .sort((a, b) => b.average - a.average || b.count - a.count)
+
+  const staffName = (r: GivenFeedback) => r.issue.assignedToName ?? 'Not assigned'
+  const openList = openStaff ? given.filter((r) => staffName(r) === openStaff) : []
+  const openRated = staffRatings.find((s) => s.name === openStaff)
+  const openIssue = (id: string) => {
+    setOpenStaff(null)
+    setModal({ type: 'detail', issueId: id })
+  }
 
   return (
     <div className="card">
@@ -183,11 +226,13 @@ function StudentFeedback({ issues }: { issues: Issue[] }) {
             </h3>
             <ul className="hotspot-list">
               {staffRatings.map((s) => (
-                <li key={s.name} className="staff-rating">
-                  <span>{s.name}</span>
-                  <span>
-                    <b className={s.average < 3 ? 'low' : ''}>{s.average.toFixed(1)}★</b> · {s.count} rated
-                  </span>
+                <li key={s.name}>
+                  <button className="staff-rating" onClick={() => setOpenStaff(s.name)} title={`See all feedback on ${s.name}`}>
+                    <span>{s.name}</span>
+                    <span>
+                      <b className={s.average < 3 ? 'low' : ''}>{s.average.toFixed(1)}★</b> · {s.count} rated
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -196,34 +241,39 @@ function StudentFeedback({ issues }: { issues: Issue[] }) {
             <h3 className="hotspot-title">Latest comments</h3>
             <ul className="hotspot-list">
               {given.slice(0, 6).map((r) => (
-                <li key={r.issue.id}>
-                  <button
-                    className={'hotspot-row' + (r.rating !== null && r.rating <= 2 ? ' low-rating' : '')}
-                    onClick={() => setModal({ type: 'detail', issueId: r.issue.id })}
-                  >
-                    <span className="hotspot-head">
-                      <b>
-                        {r.issue.ref} · {r.issue.title}
-                      </b>
-                      {r.rating !== null ? (
-                        <span className={'rating-pill' + (r.rating <= 2 ? ' low' : '')}>{r.rating}★</span>
-                      ) : (
-                        <span className="hotspot-note">Not rated</span>
-                      )}
-                    </span>
-                    <span className="reopen-reason">{r.comment ? `“${r.comment}”` : 'No comment'}</span>
-                    <span className="hotspot-note">
-                      {r.issue.studentName} · {formatDate(r.date)}
-                      {r.issue.assignedToName ? ' · fixed by ' + r.issue.assignedToName : ''}
-                    </span>
-                  </button>
-                </li>
+                <FeedbackItem key={r.issue.id} r={r} showFixer onOpen={() => setModal({ type: 'detail', issueId: r.issue.id })} />
               ))}
             </ul>
           </div>
         </div>
       ) : (
         <EmptyState icon="star" title="No feedback yet" sub="Students can rate the fixer (optional) when they confirm a fix." />
+      )}
+
+      {/* Rendered on <body> so it opens in the middle of the screen, not inside the scrolled page. */}
+      {openStaff && createPortal(
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setOpenStaff(null)}>
+          <div className="modal">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h3>{openStaff}</h3>
+                <p className="modal-sub">
+                  {openRated ? `${openRated.average.toFixed(1)}★ average from ${openRated.count} rating${openRated.count === 1 ? '' : 's'}. ` : ''}
+                  Student names are not shown.
+                </p>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setOpenStaff(null)} aria-label="Close">
+                <Icon name="x" />
+              </button>
+            </div>
+            <ul className="hotspot-list">
+              {openList.map((r) => (
+                <FeedbackItem key={r.issue.id} r={r} showFixer={false} onOpen={() => openIssue(r.issue.id)} />
+              ))}
+            </ul>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
@@ -465,7 +515,7 @@ function AllIssues() {
   return (
     <div className="card">
       <div className="card-head">
-        <h2>All Issues</h2>
+        <p className="card-sub">{matching.length} matching issue(s)</p>
         <button
           className="btn btn-ghost btn-sm"
           disabled={!matching.length}
@@ -475,7 +525,6 @@ function AllIssues() {
           <Icon name="file-text" /> Export CSV ({matching.length})
         </button>
       </div>
-      <p className="card-sub">{matching.length} matching issue(s)</p>
       <div className="toolbar">
         <input type="text" placeholder="Search title, ref, student, room..." value={filters.search} onChange={filter('search')} />
         <select value={filters.view} onChange={filter('view')} aria-label="Show">
@@ -751,47 +800,6 @@ function Reports() {
           <Hotspots issues={issues} />
           <ReopenedFixes issues={issues} />
           <StudentFeedback issues={issues} />
-          <div className="card">
-            <h2>Issues by category</h2>
-            <table className="simple">
-              <tbody>
-                <tr>
-                  <th>Category</th>
-                  <th>Reports</th>
-                </tr>
-                {categories
-                  .map((c) => ({ c, n: issues.filter((i) => i.category === c.key).length }))
-                  .filter(({ n }) => n > 0)
-                  .map(({ c, n }) => (
-                    <tr key={c.key}>
-                      <td>
-                        <Icon name={c.icon} /> {c.name}
-                      </td>
-                      <td>{n}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="card">
-            <h2>Issues by status</h2>
-            <table className="simple">
-              <tbody>
-                <tr>
-                  <th>Status</th>
-                  <th>Count</th>
-                </tr>
-                {STATUSES.map((s) => (
-                  <tr key={s}>
-                    <td>
-                      <span className={'status-pill ' + STATUS_CLASS[s]}>{s}</span>
-                    </td>
-                    <td>{issues.filter((i) => i.status === s).length}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </>
       )}
     </div>

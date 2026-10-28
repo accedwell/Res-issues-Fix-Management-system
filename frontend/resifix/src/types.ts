@@ -108,6 +108,11 @@ export interface User {
   role: string
   email: string
   extra: string
+  // What the system administrator can correct (see EditUserModal).
+  kind: Role
+  block?: string
+  room?: string
+  specialization?: string
 }
 
 export interface Setting {
@@ -122,6 +127,9 @@ export interface Auth {
   name: string | null
   userId: string | null
   studentId: string | null
+  // Students: the block and room they registered with. Their reports always use this block.
+  block?: string
+  room?: string
 }
 
 export interface Filters {
@@ -147,6 +155,7 @@ export type Modal =
   | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed' | 'editReport' | 'cancelReport'; issueId: string }
   | { type: 'addUser' }
   | { type: 'removeUser'; userId: string }
+  | { type: 'editUser'; userId: string }
   | { type: 'addCategory' }
   | { type: 'editCategory'; categoryKey: string }
   | { type: 'removeCategory'; categoryKey: string }

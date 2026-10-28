@@ -1,11 +1,12 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { CameraCapture } from '../components/CameraCapture'
 import { EmptyState, IssueRow, StatRow } from '../components/common'
 import { Icon } from '../components/Icon'
 import { ProgressSteps } from '../components/ProgressSteps'
 import { useApp } from '../context/appContext'
 import { fetchSimilarIssues } from '../api'
-import { preparePhoto, type PreparedPhoto } from '../photo'
-import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, OVERDUE_AFTER_DAYS, PRIORITIES } from '../data/constants'
+import { canUseWebcam, preparePhoto, type PreparedPhoto } from '../photo'
+import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, OVERDUE_AFTER_DAYS, PRIORITIES, SHARED_PLACES } from '../data/constants'
 import { canReportNotFixed, formatDate, isForUser, isOpen, matchesView, stop } from '../utils'
 import type { Issue, Priority, SimilarIssue } from '../types'
 
@@ -61,7 +62,6 @@ function spotlightNote(issue: Issue) {
 // Welcome banner: who you are, what needs you, and the quickest way to report something.
 function WelcomeBanner({ mine }: { mine: Issue[] }) {
   const { auth, setModal } = useApp()
-  const showReports = useShowReports()
   const startReport = useStartReport()
   const [hour] = useState(() => new Date().getHours())
   const firstName = (auth.name ?? 'there').split(' ')[0]
@@ -88,9 +88,6 @@ function WelcomeBanner({ mine }: { mine: Issue[] }) {
         <div className="st-banner-cta">
           <button className="btn btn-primary" onClick={() => startReport()}>
             <Icon name="plus-circle" /> Report an issue
-          </button>
-          <button className="btn btn-glass" onClick={() => showReports(open.length ? 'open' : 'all')}>
-            My reports <Icon name="arrow-right" />
           </button>
         </div>
       </div>
@@ -262,24 +259,72 @@ function AlreadyReported({ category, residence, room }: { category: string; resi
   )
 }
 
+// "Take a photo" opens the phone camera (or the laptop webcam); "Upload a photo" picks a saved picture.
+function PhotoButtons({
+  onFile,
+  openCamera,
+  disabled = false,
+  small = false,
+}: {
+  onFile: (file: File | undefined) => void
+  openCamera: () => void
+  disabled?: boolean
+  small?: boolean
+}) {
+  const size = small ? ' btn-sm' : ''
+  const pick = (e: ChangeEvent<HTMLInputElement>) => {
+    onFile(e.target.files?.[0])
+    e.target.value = '' // so the same picture can be chosen again after Remove
+  }
+  return (
+    <>
+      {canUseWebcam() ? (
+        <button type="button" className={'btn btn-primary' + size} onClick={openCamera} disabled={disabled}>
+          <Icon name="camera" /> Take a photo
+        </button>
+      ) : (
+        <label className={'btn btn-primary' + size}>
+          <Icon name="camera" /> Take a photo
+          <input type="file" accept="image/*" capture="environment" disabled={disabled} onChange={pick} />
+        </label>
+      )}
+      <label className={'btn btn-ghost' + size}>
+        <Icon name="image" /> Upload a photo
+        <input type="file" accept="image/*" disabled={disabled} onChange={pick} />
+      </label>
+    </>
+  )
+}
+
 function ReportIssue() {
-  const { categories, addIssue, setTab, filters } = useApp()
+  const { categories, addIssue, setTab, filters, auth } = useApp()
   const preset = categories.some((c) => c.key === filters.category) ? filters.category : ''
+  // The block and room from sign-up. The block is fixed; the room can be swapped for a shared
+  // place in the same block (hallway, bathroom...) with "Somewhere else in my block".
+  const homeBlock = auth.block ?? ''
+  const homeRoom = auth.room ?? ''
+  const [elsewhere, setElsewhere] = useState(!homeRoom)
   const [form, setForm] = useState({
     title: '',
     category: preset,
     priority: 'Normal' as Priority,
-    residence: BLOCKS[0],
-    room: '',
+    residence: homeBlock || BLOCKS[0],
+    room: homeRoom,
     description: '',
   })
+  const toggleElsewhere = (on: boolean) => {
+    setElsewhere(on)
+    setForm((f) => ({ ...f, room: on ? '' : homeRoom }))
+  }
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null)
   const [photoError, setPhotoError] = useState('')
   const [preparing, setPreparing] = useState(false)
+  const [camera, setCamera] = useState(false)
 
   const choosePhoto = async (file: File | undefined) => {
     if (!file) return
     setPhotoError('')
+    setError('')
     setPreparing(true)
     try {
       setPhoto(await preparePhoto(file))
@@ -372,17 +417,38 @@ function ReportIssue() {
           <div className="st-two">
             <div className="field">
               <label>Block *</label>
-              <select value={form.residence} onChange={field('residence')} required>
-                {BLOCKS.map((block) => (
-                  <option key={block}>{block}</option>
-                ))}
-              </select>
+              {homeBlock ? (
+                <input type="text" value={homeBlock} readOnly className="locked" title="Your block from sign-up" />
+              ) : (
+                <select value={form.residence} onChange={field('residence')} required>
+                  {BLOCKS.map((block) => (
+                    <option key={block}>{block}</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="field">
-              <label>Room / location *</label>
-              <input type="text" value={form.room} onChange={field('room')} placeholder="e.g. 204 or Common Room" required />
+              <label>{elsewhere ? 'Where in the block? *' : 'Room *'}</label>
+              {elsewhere ? (
+                <select value={form.room} onChange={field('room')} required>
+                  <option value="" disabled>
+                    Choose a shared place
+                  </option>
+                  {SHARED_PLACES.map((place) => (
+                    <option key={place}>{place}</option>
+                  ))}
+                </select>
+              ) : (
+                <input type="text" value={homeRoom} readOnly className="locked" title="Your room from sign-up" />
+              )}
             </div>
           </div>
+          {homeRoom && (
+            <label className="st-check">
+              <input type="checkbox" checked={elsewhere} onChange={(e) => toggleElsewhere(e.target.checked)} />
+              It's somewhere else in my block (hallway, bathroom, common room…)
+            </label>
+          )}
           <AlreadyReported category={form.category} residence={form.residence} room={form.room} />
         </section>
 
@@ -418,10 +484,7 @@ function ReportIssue() {
                   <b>Photo added</b>
                   <small>Maintenance will see this with your report.</small>
                   <span className="st-photo-actions">
-                    <label className="btn btn-ghost btn-sm">
-                      Change
-                      <input type="file" accept="image/*" onChange={(e) => choosePhoto(e.target.files?.[0])} />
-                    </label>
+                    <PhotoButtons onFile={choosePhoto} openCamera={() => setCamera(true)} small />
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPhoto(null)}>
                       <Icon name="x" /> Remove
                     </button>
@@ -429,16 +492,19 @@ function ReportIssue() {
                 </div>
               </div>
             ) : (
-              <label className="st-drop">
+              <div className="st-drop">
                 <Icon name="image" />
                 <span className="st-drop-text">
                   <b>{preparing ? 'Preparing photo…' : 'Add a photo of the problem'}</b>
-                  <small>Take one or choose from your gallery. It helps maintenance bring the right tools.</small>
+                  <small>Take a picture now or upload one you already have. It helps maintenance bring the right tools.</small>
+                  <span className="st-photo-actions">
+                    <PhotoButtons onFile={choosePhoto} openCamera={() => setCamera(true)} disabled={preparing} />
+                  </span>
                 </span>
-                <input type="file" accept="image/*" disabled={preparing} onChange={(e) => choosePhoto(e.target.files?.[0])} />
-              </label>
+              </div>
             )}
             {photoError && <div className="field-error">{photoError}</div>}
+            {camera && <CameraCapture onCapture={choosePhoto} close={() => setCamera(false)} />}
           </div>
         </section>
 
@@ -472,12 +538,11 @@ function MyReports() {
   return (
     <div className="card">
       <div className="card-head">
-        <h2>My Reports</h2>
+        <p className="card-sub">{plural(all.length, 'report', 'reports')} submitted so far. Tap a report to see its full progress.</p>
         <button className="btn btn-primary btn-sm" onClick={() => startReport()}>
           <Icon name="plus-circle" /> New report
         </button>
       </div>
-      <p className="card-sub">{plural(all.length, 'report', 'reports')} submitted so far. Tap a report to see its full progress.</p>
       <div className="toolbar">
         <input
           type="search"
@@ -564,7 +629,6 @@ function Notifications() {
 
   return (
     <div className="card">
-      <h2>Notifications</h2>
       <p className="card-sub">Updates on your reports — received, assigned, in progress and resolved.</p>
       {mine.length ? (
         mine.map((n) => (

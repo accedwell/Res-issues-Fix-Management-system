@@ -168,6 +168,9 @@ export interface NewUserInput {
 
 export const apiAddUser = (user: NewUserInput) => request('POST', '/users', user)
 export const apiRemoveUser = (id: string) => request<{ unassignedJobs: number }>('DELETE', `/users/${id}`)
+// Students: { block, room }. Maintenance staff: { specialization }.
+export const apiEditUser = (id: string, details: { block?: string; room?: string; specialization?: string }) =>
+  request('PATCH', `/users/${id}`, details)
 export const apiAddCategory = (name: string, icon: string) => request('POST', '/categories', { name, icon })
 export const apiEditCategory = (key: string, name: string, icon: string) =>
   request('PATCH', `/categories/${key}`, { name, icon })
@@ -180,12 +183,10 @@ export type Topic = 'issues' | 'notifications' | 'users' | 'staff' | 'categories
 
 // Opens the server's live-update stream. Calls onChange with the kinds of data that changed.
 // The browser reconnects by itself if the connection drops. Returns a function that closes it.
-export function connectLiveUpdates(onChange: (topics: Topic[]) => void, onStatus: (connected: boolean) => void) {
+export function connectLiveUpdates(onChange: (topics: Topic[]) => void) {
   const token = getToken()
   if (!token || typeof EventSource === 'undefined') return () => {}
   const source = new EventSource(`${API_URL}/events?token=${encodeURIComponent(token)}`)
-  source.onopen = () => onStatus(true)
-  source.onerror = () => onStatus(false)
   source.onmessage = (e) => {
     try {
       const { topics } = JSON.parse(e.data) as { topics: Topic[] }

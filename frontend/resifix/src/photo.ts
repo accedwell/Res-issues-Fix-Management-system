@@ -12,6 +12,11 @@ export interface PreparedPhoto {
   preview: string // data URL to show before submitting
 }
 
+// Phones open their own camera app from a file input with "capture". Laptops ignore that, so there
+// the webcam is shown in a dialog instead. The webcam needs https or localhost.
+export const canUseWebcam = () =>
+  !window.matchMedia('(pointer: coarse)').matches && window.isSecureContext && !!navigator.mediaDevices?.getUserMedia
+
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)

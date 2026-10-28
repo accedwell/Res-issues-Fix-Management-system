@@ -19,7 +19,7 @@ const DASHBOARDS = {
 }
 
 export function AppShell() {
-  const { auth, tabs, setTab, logout, toast, live, ready } = useApp()
+  const { auth, tabs, setTab, logout, toast, ready } = useApp()
   const [menuOpen, setMenuOpen] = useState(false)
   const role = auth.role as Role
   const tab = tabs[role]
@@ -89,15 +89,6 @@ export function AppShell() {
               <h1>{PAGE_TITLES[role][tab] || ''}</h1>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {role === 'student' && (
-                <button className="btn btn-primary btn-sm" onClick={() => setTab('report')}>
-                  <Icon name="plus-circle" /> Report Issue
-                </button>
-              )}
-              <span className={'live-status' + (live ? ' on' : '')} title={live ? 'Live: updates appear instantly' : 'Reconnecting to the server…'}>
-                <span className="live-dot" aria-hidden="true" />
-                {live ? 'Live' : 'Offline'}
-              </span>
               <NotificationBell />
               <button className="btn btn-ghost btn-sm" onClick={logout}>
                 <Icon name="logout" /> Log out

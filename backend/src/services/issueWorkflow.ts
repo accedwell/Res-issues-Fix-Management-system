@@ -2,7 +2,7 @@ import { badRequest, forbidden, notFound, today } from "../lib/http.js";
 import { getCategory, OTHER_CATEGORY } from "../store/categories.js";
 import { newId } from "../store/db.js";
 import { deleteIssue, getIssue, insertIssue, listIssues, nextIssueRef, savePhoto, updateIssue, type IssueQuery } from "../store/issues.js";
-import { addNotification } from "../store/notifications.js";
+import { addNotification, wasNotified } from "../store/notifications.js";
 import { isSettingOn } from "../store/settings.js";
 import { getUser, listUsers } from "../store/users.js";
 import { recommendStaff } from "./assignment.js";
@@ -234,6 +234,25 @@ export async function confirmResolution(student: User, id: string, rating: numbe
 function isOverdue(issue: Issue): boolean {
   const days = Math.floor((Date.parse(today()) - Date.parse(issue.dateReported)) / 86_400_000);
   return !DONE_STATUSES.includes(issue.status) && days > OVERDUE_AFTER_DAYS[issue.priority];
+}
+
+// Marks the overdue alert, so each student gets it only once per report.
+const OVERDUE_ALERT = "is overdue";
+
+// Tells each student, once, when their report is still not fixed after the allowed time, so they
+// can push it again with "Still not fixed". Returns how many alerts were sent.
+export async function alertOverdueReports(): Promise<number> {
+  let sent = 0;
+  for (const issue of (await listIssues()).filter(isOverdue)) {
+    if (await wasNotified(issue.studentId, issue.id, OVERDUE_ALERT)) continue;
+    await addNotification(
+      issue.studentId,
+      `${issue.ref} ${OVERDUE_ALERT} — it was not fixed within ${OVERDUE_AFTER_DAYS[issue.priority]} days. If it is still a problem, open it and tap “Still not fixed” to push it again.`,
+      issue.id,
+    );
+    sent++;
+  }
+  return sent;
 }
 
 // A student can re-open a report that was resolved or closed, that maintenance could not resolve,

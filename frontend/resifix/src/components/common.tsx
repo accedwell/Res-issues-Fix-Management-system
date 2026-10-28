@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from './Icon'
 import { useApp } from '../context/appContext'
-import { PRIORITY_CLASS, STATUS_CLASS } from '../data/constants'
+import { STATUS_CLASS } from '../data/constants'
 import { daysOpen, formatDate, isOverdue, notResolvedReason } from '../utils'
 import type { Issue } from '../types'
 
@@ -96,7 +96,6 @@ export function IssueRow({ issue, extra }: { issue: Issue; extra?: ReactNode }) 
           </div>
         )}
       </div>
-      <span className={'priority-pill ' + PRIORITY_CLASS[issue.priority]}>{issue.priority}</span>
       <span className={'status-pill ' + STATUS_CLASS[issue.status]}>{issue.status}</span>
       {extra ?? (
         <span className="icon-inline" style={{ color: 'var(--ink-soft)' }}>
