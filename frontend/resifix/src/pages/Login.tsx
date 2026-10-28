@@ -20,7 +20,7 @@ export function Login() {
     setBusy(true)
     try {
       const user = await apiLogin(form.email.trim(), form.password)
-      login(user.name, user.role, user.id)
+      login(user.name, user.role, user.id, user)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed.')
       setBusy(false)

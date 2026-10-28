@@ -4,7 +4,7 @@ export const CATEGORIES: Category[] = [
   { key: 'plumbing', name: 'Plumbing', icon: 'droplet' },
   { key: 'electrical', name: 'Electrical', icon: 'zap' },
   { key: 'furniture', name: 'Furniture', icon: 'armchair' },
-  { key: 'cleaning', name: 'Cleaning', icon: 'spray' },
+  { key: 'cleaning', name: 'Cleaning materials', icon: 'spray' },
   { key: 'wifi', name: 'Wi-Fi / Internet', icon: 'wifi' },
   { key: 'security', name: 'Security', icon: 'shield' },
   { key: 'heating', name: 'Heating / Cooling', icon: 'thermometer' },
@@ -20,6 +20,10 @@ export const CATEGORY_ICONS = [
 ]
 
 export const BLOCKS = ['Block A', 'Block B', 'Block C', 'Block D', 'Block E', 'Block F']
+
+// Places in a block that belong to nobody. Besides their own room, students can only pick these,
+// so nobody reports a problem in another student's room. The server checks the same list.
+export const SHARED_PLACES = ['Hallway', 'Bathroom', 'Kitchen', 'Common room', 'Laundry room', 'Stairs / entrance', 'Outside the block']
 
 export const STATUSES: Status[] = ['Submitted', 'Received', 'Assigned', 'In Progress', 'Not Resolved', 'Resolved', 'Closed']
 
@@ -67,19 +71,19 @@ export const ROLE_NAMES: Record<Role, string> = {
 
 export const NAV: Record<Role, NavItem[]> = {
   student: [
-    { key: 'overview', label: 'Overview', icon: 'home' },
+    { key: 'overview', label: 'Home', icon: 'home' },
     { key: 'report', label: 'Report an Issue', icon: 'plus-circle' },
-    { key: 'reports', label: 'My Reports', icon: 'list' },
     { key: 'notifications', label: 'Notifications', icon: 'bell' },
   ],
   admin: [
-    { key: 'overview', label: 'Overview', icon: 'home' },
+    { key: 'overview', label: 'Home', icon: 'home' },
     { key: 'issues', label: 'All Issues', icon: 'list' },
     { key: 'reports', label: 'Reports', icon: 'file-text' },
   ],
   maintenance: [
     { key: 'assigned', label: 'Assigned to Me', icon: 'tools' },
     { key: 'completed', label: 'Completed', icon: 'check-circle' },
+    { key: 'reports', label: 'My Reports', icon: 'file-text' },
   ],
   sysadmin: [
     { key: 'users', label: 'Users', icon: 'users' },
@@ -89,9 +93,9 @@ export const NAV: Record<Role, NavItem[]> = {
 }
 
 export const PAGE_TITLES: Record<Role, Record<string, string>> = {
-  student: { overview: 'Overview', report: 'Report an Issue', reports: 'My Reports', notifications: 'Notifications' },
-  admin: { overview: 'Overview', issues: 'All Issues', reports: 'Reports' },
-  maintenance: { assigned: 'Assigned to Me', completed: 'Completed Tasks' },
+  student: { overview: 'Home', report: 'Report an Issue', reports: 'My Reports', notifications: 'Notifications' },
+  admin: { overview: 'Home', issues: 'All Issues', reports: 'Reports' },
+  maintenance: { assigned: 'Assigned to Me', completed: 'Completed Tasks', reports: 'My Reports' },
   sysadmin: { users: 'Manage Users', categories: 'Manage Categories', settings: 'System Settings' },
 }
 
@@ -113,7 +117,7 @@ export const ISSUE_VIEWS = [
   { key: 'done', label: 'Resolved / closed' },
 ]
 
-// How many days an open issue may take, by priority, before it counts as overdue.
-export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 1, High: 3, Normal: 7, Low: 14 }
+// Every report, whatever its priority, is overdue once it is still open after 2 days (same as the server).
+export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 2, High: 2, Normal: 2, Low: 2 }
 
 export const DEFAULT_FILTERS: Filters = { view: 'all', status: 'all', category: 'all', residence: 'all', assignee: 'all', room: '', search: '' }

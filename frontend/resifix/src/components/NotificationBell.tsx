@@ -6,26 +6,18 @@ import type { AppNotification } from '../types'
 
 const MAX_SHOWN = 8
 
-// Bell in the top bar with the unread count. Opening it shows the new notifications and marks
-// them as read, so they are gone from the bell next time.
+// Bell in the top bar with the unread count. Each notification stays in the bell until it is
+// clicked and viewed; then it is marked as read and disappears.
 export function NotificationBell() {
-  const { notifications, auth, issues, setModal, setTab, markNotificationsRead } = useApp()
+  const { notifications, auth, issues, setModal, setTab, markNotificationsRead, markNotificationRead } = useApp()
   const [open, setOpen] = useState(false)
-  // The notifications that were new when the panel was opened.
-  const [shown, setShown] = useState<string[]>([])
   const wrap = useRef<HTMLDivElement>(null)
 
   const mine = notifications.filter((n) => isForUser(n, auth))
-  const unread = mine.filter((n) => !n.read).length
-  const fresh = mine.filter((n) => shown.includes(n.id))
+  const fresh = mine.filter((n) => !n.read)
+  const unread = fresh.length
 
-  const toggle = () => {
-    if (!open) {
-      setShown(mine.filter((n) => !n.read).map((n) => n.id))
-      if (unread) markNotificationsRead()
-    }
-    setOpen(!open)
-  }
+  const toggle = () => setOpen(!open)
 
   // Close when clicking outside or pressing Escape.
   useEffect(() => {
@@ -45,6 +37,7 @@ export function NotificationBell() {
   }, [open])
 
   const openNotification = (n: AppNotification) => {
+    markNotificationRead(n.id)
     setOpen(false)
     if (n.issueId && issues.some((i) => i.id === n.issueId)) setModal({ type: 'detail', issueId: n.issueId })
   }
@@ -66,6 +59,11 @@ export function NotificationBell() {
         <div className="bell-panel" role="dialog" aria-label="Notifications">
           <div className="bell-head">
             <b>Notifications</b>
+            {unread > 0 && (
+              <button className="bell-clear" onClick={markNotificationsRead}>
+                Mark all as read
+              </button>
+            )}
           </div>
           {fresh.length ? (
             <ul className="bell-list">

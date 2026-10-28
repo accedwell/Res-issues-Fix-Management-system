@@ -39,7 +39,7 @@ export function Signup() {
         room: form.room.trim(),
         password: form.password,
       })
-      login(user.name, user.role, user.id)
+      login(user.name, user.role, user.id, user)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed.')
       setBusy(false)

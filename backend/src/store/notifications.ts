@@ -37,3 +37,8 @@ export async function markAllRead(userId: string): Promise<void> {
 export async function deleteNotificationsFor(userId: string): Promise<void> {
   await prisma.notification.deleteMany({ where: { userId } });
 }
+
+// Whether this user was already sent a notification about this issue containing the given text.
+export async function wasNotified(userId: string, issueId: string, text: string): Promise<boolean> {
+  return (await prisma.notification.count({ where: { userId, issueId, message: { contains: text } } })) > 0;
+}

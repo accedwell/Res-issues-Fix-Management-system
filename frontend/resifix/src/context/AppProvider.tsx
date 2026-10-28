@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppContext, type AppState } from './appContext'
 import {
-  apiAddCategory, apiAddUser, apiAssignIssue, apiReceiveIssue, apiConfirmResolution, apiCreateIssue, apiEditCategory, apiMe,
-  apiReadAllNotifications, apiReadNotification, apiRemoveCategory, apiRemoveUser, apiReportNotFixed, apiSetSetting,
+  apiAddCategory, apiAddUser, apiEditUser, apiAssignIssue, apiReceiveIssue, apiConfirmResolution, apiCreateIssue, apiEditCategory, apiMe,
+  apiReadAllNotifications, apiReadNotification, apiRemoveCategory, apiRemoveUser, apiReportNotFixed, apiEditIssue, apiCancelIssue, apiSetSetting,
   apiUpdateProgress, clearToken, connectLiveUpdates, fetchCategories, fetchIssues, fetchNotifications, fetchSettings,
   fetchStaff, fetchUsers, getToken, type ApiUser, type Topic,
 } from '../api'
 import { CATEGORIES, DEFAULT_FILTERS, DEFAULT_TABS, ROLE_NAMES } from '../data/constants'
+import { emitCallSignal } from '../callBus'
 import { isForUser } from '../utils'
 import type { AppNotification, Auth, Category, Filters, Issue, Modal, Role, Route, Setting, Staff, User } from '../types'
 
@@ -31,7 +32,10 @@ function toUserRow(user: ApiUser): User {
       : user.role === 'maintenance'
         ? (user.specialization ?? '')
         : ''
-  return { id: user.id, name: user.name, role: ROLE_NAMES[user.role], email: user.email, extra: extra || '—' }
+  return {
+    id: user.id, name: user.name, role: ROLE_NAMES[user.role], email: user.email, extra: extra || '—',
+    kind: user.role, block: user.block, room: user.room, specialization: user.specialization,
+  }
 }
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong. Please try again.')
@@ -40,7 +44,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState<Route>('landing')
   const [auth, setAuth] = useState<Auth>(LOGGED_OUT)
   const [restoring, setRestoring] = useState(() => !!getToken())
-  const [live, setLive] = useState(false)
   const [ready, setReady] = useState(false)
   const [tabs, setTabs] = useState<Record<Role, string>>({ ...DEFAULT_TABS })
   const [modal, setModal] = useState<Modal | null>(null)
@@ -107,9 +110,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const startSession = useCallback(
-    async (name: string, role: Role, userId: string, welcome: boolean) => {
+    async (name: string, role: Role, userId: string, welcome: boolean, home: { block?: string; room?: string } = {}) => {
       roleRef.current = role
-      setAuth({ loggedIn: true, role, name, userId, studentId: role === 'student' ? userId : null })
+      setAuth({ loggedIn: true, role, name, userId, studentId: role === 'student' ? userId : null, block: home.block, room: home.room })
       setTabs({ ...DEFAULT_TABS })
       setFilters(DEFAULT_FILTERS)
       setReady(false)
@@ -130,7 +133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!getToken()) return
     apiMe()
-      .then((user) => startSession(user.name, user.role, user.id, false))
+      .then((user) => startSession(user.name, user.role, user.id, false, user))
       .catch(() => clearToken())
       .finally(() => setRestoring(false))
   }, [startSession])
@@ -138,13 +141,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Live updates: reload whatever changed as soon as any user saves something.
   useEffect(() => {
     if (!auth.loggedIn) return
-    const close = connectLiveUpdates((topics) => void refresh(topics), setLive)
+    const close = connectLiveUpdates((topics) => void refresh(topics), emitCallSignal)
     // Catch up after the tab was in the background or the connection dropped.
     const onFocus = () => void refresh(ALL_TOPICS)
     window.addEventListener('focus', onFocus)
     return () => {
       close()
-      setLive(false)
       window.removeEventListener('focus', onFocus)
     }
   }, [auth.loggedIn, auth.userId, refresh])
@@ -178,8 +180,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     auth,
     restoring,
     ready,
-    live,
-    login: (name, role, userId) => void startSession(name, role, userId, true),
+    login: (name, role, userId, home) => void startSession(name, role, userId, true, home),
+    refreshIssues: () => void refresh(['issues', 'notifications']),
     logout: endSession,
     tabs,
     setTab,
@@ -226,9 +228,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     confirmResolution: (issue, rating, comment) =>
       save(() => apiConfirmResolution(issue.id, rating, comment), ISSUE_TOPICS, 'Thanks for confirming — the report is now closed.'),
+    editReport: (issue, changes) => save(() => apiEditIssue(issue.id, changes), ISSUE_TOPICS, `${issue.ref} was updated.`),
+    cancelReport: (issue) => save(() => apiCancelIssue(issue.id), ISSUE_TOPICS, `${issue.ref} was cancelled.`),
     reportNotFixed: (issue, reason) =>
       save(() => apiReportNotFixed(issue.id, reason), ISSUE_TOPICS, 'Issue re-opened — maintenance has been notified.'),
     addUser: (user) => save(() => apiAddUser(user), ['users', 'staff'], `${user.name} has been added.`),
+    editUser: (userId, details) => {
+      const name = users.find((u) => u.id === userId)?.name ?? 'User'
+      return save(() => apiEditUser(userId, details), ['users', 'staff'], `${name} has been updated.`)
+    },
     removeUser: (userId) => {
       const name = users.find((u) => u.id === userId)?.name ?? 'User'
       return save(

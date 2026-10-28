@@ -1,8 +1,8 @@
 import { badRequest, forbidden, notFound, today } from "../lib/http.js";
 import { getCategory, OTHER_CATEGORY } from "../store/categories.js";
 import { newId } from "../store/db.js";
-import { getIssue, insertIssue, listIssues, nextIssueRef, updateIssue, type IssueQuery } from "../store/issues.js";
-import { addNotification } from "../store/notifications.js";
+import { deleteIssue, getIssue, insertIssue, listIssues, nextIssueRef, savePhoto, updateIssue, type IssueQuery } from "../store/issues.js";
+import { addNotification, wasNotified } from "../store/notifications.js";
 import { isSettingOn } from "../store/settings.js";
 import { getUser, listUsers } from "../store/users.js";
 import { recommendStaff } from "./assignment.js";
@@ -50,6 +50,38 @@ async function notifyStaff(issue: Issue, message: string) {
   if (issue.assignedTo) await addNotification(issue.assignedTo, message, issue.id);
 }
 
+// ===== Duplicate check =====
+
+export interface SimilarIssue {
+  ref: string;
+  title: string;
+  status: Status;
+  room: string;
+  dateReported: string;
+  sameRoom: boolean;
+  mine: boolean;
+}
+
+const sameRoom = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+// Open reports of the same category in the same block, same room first. Shown to students before
+// they submit, so only what is needed to recognise the problem is returned (no names, no description).
+export async function findSimilarOpen(user: User, category: string, residence: string, room: string): Promise<SimilarIssue[]> {
+  const open = (await listIssues({ category, residence })).filter((i) => !DONE_STATUSES.includes(i.status));
+  return open
+    .map((i) => ({
+      ref: i.ref,
+      title: i.title,
+      status: i.status,
+      room: i.room,
+      dateReported: i.dateReported,
+      sameRoom: !!room.trim() && sameRoom(i.room, room),
+      mine: i.studentId === user.id,
+    }))
+    .sort((a, b) => Number(b.sameRoom) - Number(a.sameRoom))
+    .slice(0, 5);
+}
+
 // ===== Workflow steps =====
 
 export interface NewIssueInput {
@@ -59,15 +91,17 @@ export interface NewIssueInput {
   residence: string;
   room: string;
   description: string;
-  photo: boolean;
+  photo?: { mimeType: string; data: Buffer };
 }
 
 export async function createIssue(student: User, input: NewIssueInput): Promise<Issue> {
-  const category = (await getCategory(input.category)) ? input.category : OTHER_CATEGORY;
+  const { photo, ...details } = input;
+  const category = (await getCategory(details.category)) ? details.category : OTHER_CATEGORY;
   const issue: Issue = {
     id: newId("i"),
     ref: await nextIssueRef(),
-    ...input,
+    ...details,
+    photo: !!photo,
     category,
     status: "Submitted",
     studentId: student.id,
@@ -79,10 +113,42 @@ export async function createIssue(student: User, input: NewIssueInput): Promise<
     reopened: 0,
   };
   await insertIssue(issue);
+  if (photo) await savePhoto(issue.id, photo.mimeType, photo.data);
   await notifyStudent(issue, `Your report ${issue.ref} was submitted.`);
   const urgent = issue.priority === "Urgent" ? "URGENT " : "";
   await notifyAdmins(issue, `New ${urgent}report ${issue.ref}: ${issue.title} (${issue.residence}, ${issue.room}).`);
   return issue;
+}
+
+// A student can change or cancel their own report only until the admin has received it.
+async function ownSubmittedReport(student: User, id: string): Promise<Issue> {
+  const issue = await getIssueFor(student, id);
+  if (issue.studentId !== student.id) throw forbidden("This is not your report");
+  if (issue.status !== "Submitted") throw badRequest("This report has already been received, so it can no longer be changed");
+  return issue;
+}
+
+export type ReportChanges = Omit<NewIssueInput, "photo">;
+
+export async function editReport(student: User, id: string, changes: ReportChanges): Promise<Issue> {
+  const issue = await ownSubmittedReport(student, id);
+  const category = (await getCategory(changes.category)) ? changes.category : OTHER_CATEGORY;
+  const updated = await updateIssue(id, {
+    ...changes,
+    category,
+    history: [...issue.history, { status: "Submitted", date: today(), note: "Report edited by student." }],
+  });
+  await notifyAdmins(updated, `${updated.ref} — ${updated.title} was edited by the student.`);
+  return updated;
+}
+
+// Removes the report. Admins are told, without a link, since the report no longer exists.
+export async function cancelReport(student: User, id: string): Promise<void> {
+  const issue = await ownSubmittedReport(student, id);
+  await deleteIssue(id);
+  for (const admin of await listUsers("admin")) {
+    await addNotification(admin.id, `${issue.ref} — ${issue.title} was cancelled by the student.`);
+  }
 }
 
 // Admin acknowledges a newly submitted report.
@@ -168,6 +234,25 @@ export async function confirmResolution(student: User, id: string, rating: numbe
 function isOverdue(issue: Issue): boolean {
   const days = Math.floor((Date.parse(today()) - Date.parse(issue.dateReported)) / 86_400_000);
   return !DONE_STATUSES.includes(issue.status) && days > OVERDUE_AFTER_DAYS[issue.priority];
+}
+
+// Marks the overdue alert, so each student gets it only once per report.
+const OVERDUE_ALERT = "is overdue";
+
+// Tells each student, once, when their report is still not fixed after the allowed time, so they
+// can push it again with "Still not fixed". Returns how many alerts were sent.
+export async function alertOverdueReports(): Promise<number> {
+  let sent = 0;
+  for (const issue of (await listIssues()).filter(isOverdue)) {
+    if (await wasNotified(issue.studentId, issue.id, OVERDUE_ALERT)) continue;
+    await addNotification(
+      issue.studentId,
+      `${issue.ref} ${OVERDUE_ALERT} — it was not fixed within ${OVERDUE_AFTER_DAYS[issue.priority]} days. If it is still a problem, open it and tap “Still not fixed” to push it again.`,
+      issue.id,
+    );
+    sent++;
+  }
+  return sent;
 }
 
 // A student can re-open a report that was resolved or closed, that maintenance could not resolve,

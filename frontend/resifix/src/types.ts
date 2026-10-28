@@ -13,6 +13,17 @@ export type Status =
 
 export type Priority = 'Low' | 'Normal' | 'High' | 'Urgent'
 
+// An open report of the same kind in the same block, shown before a student submits (no names).
+export interface SimilarIssue {
+  ref: string
+  title: string
+  status: Status
+  room: string
+  dateReported: string
+  sameRoom: boolean
+  mine: boolean
+}
+
 export interface Category {
   key: string
   name: string
@@ -61,6 +72,8 @@ export interface Issue {
   history: HistoryEntry[]
   feedback: Feedback | null
   reopened?: number
+  // Sent by the server when the viewer may see the chat on this report (see Chat.tsx).
+  chat?: ChatSummary | null
 }
 
 export interface NewIssue {
@@ -70,7 +83,13 @@ export interface NewIssue {
   residence: string
   room: string
   description: string
-  photo: boolean
+  photo?: PhotoUpload
+}
+
+// A report photo on its way to the server: data is base64 without the "data:" prefix.
+export interface PhotoUpload {
+  mimeType: string
+  data: string
 }
 
 // Sent either to one person (userId) or to everyone with a role, e.g. all residence admins.
@@ -91,6 +110,11 @@ export interface User {
   role: string
   email: string
   extra: string
+  // What the system administrator can correct (see EditUserModal).
+  kind: Role
+  block?: string
+  room?: string
+  specialization?: string
 }
 
 export interface Setting {
@@ -105,6 +129,9 @@ export interface Auth {
   name: string | null
   userId: string | null
   studentId: string | null
+  // Students: the block and room they registered with. Their reports always use this block.
+  block?: string
+  room?: string
 }
 
 export interface Filters {
@@ -127,9 +154,26 @@ export interface NavItem {
 }
 
 export type Modal =
-  | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed'; issueId: string }
+  | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed' | 'editReport' | 'cancelReport' | 'chat'; issueId: string }
   | { type: 'addUser' }
   | { type: 'removeUser'; userId: string }
+  | { type: 'editUser'; userId: string }
   | { type: 'addCategory' }
   | { type: 'editCategory'; categoryKey: string }
   | { type: 'removeCategory'; categoryKey: string }
+
+// Chat on a report between the student and the assigned staff member. Admins can only read it.
+export interface ChatSummary {
+  canSend: boolean
+  total: number
+  unread: number
+}
+
+export interface ChatMessage {
+  id: string
+  body: string
+  at: string // ISO time
+  mine: boolean
+  // "You", the staff member's name, or "Student" (maintenance never sees the student's name).
+  from: string
+}

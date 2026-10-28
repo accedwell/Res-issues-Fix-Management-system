@@ -16,6 +16,8 @@ const withDetails = {
   reporter: true,
   block: true,
   feedback: true,
+  // Only whether a photo exists; the image itself is loaded separately.
+  photo: { select: { id: true } },
   history: { orderBy: { createdAt: "asc" } },
 } as const satisfies Prisma.MaintenanceIssueInclude;
 type IssueRow = Prisma.MaintenanceIssueGetPayload<{ include: typeof withDetails }>;
@@ -35,7 +37,7 @@ function toIssue(row: IssueRow): Issue {
     studentName: row.reporter.fullName,
     assignedTo: row.assigneeId,
     dateReported: toDay(row.reportedAt),
-    photo: row.hasPhoto,
+    photo: !!row.photo,
     history: row.history.map((h) => ({
       status: (h.newValue as Status) ?? "Submitted",
       date: toDay(h.createdAt),
@@ -166,6 +168,25 @@ export async function updateIssue(id: string, changes: Partial<Issue>): Promise<
   const updated = await getIssue(id);
   if (!updated) throw new Error(`Issue ${id} not found`);
   return updated;
+}
+
+// Removes a report with its history, photo and feedback.
+export async function deleteIssue(id: string): Promise<void> {
+  await prisma.maintenanceIssue.delete({ where: { id } });
+}
+
+// The photo attached to a report.
+export async function savePhoto(issueId: string, mimeType: string, data: Buffer): Promise<void> {
+  const photo = { mimeType, size: data.length, data: new Uint8Array(data) };
+  await prisma.$transaction([
+    prisma.issuePhoto.upsert({ where: { issueId }, create: { issueId, ...photo }, update: photo }),
+    prisma.maintenanceIssue.update({ where: { id: issueId }, data: { hasPhoto: true } }),
+  ]);
+}
+
+export async function getPhoto(issueId: string): Promise<{ mimeType: string; data: Buffer } | undefined> {
+  const row = await prisma.issuePhoto.findUnique({ where: { issueId } });
+  return row ? { mimeType: row.mimeType, data: Buffer.from(row.data) } : undefined;
 }
 
 // Reserves the next reference number, e.g. ISS-2026-00133. The counter is updated in one

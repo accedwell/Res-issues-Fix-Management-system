@@ -51,6 +51,9 @@ export function historyAction(status: Status, note: string): HistoryAction {
 
 // Notifications need a type and short title in the database; both follow from the message.
 export function notificationKind(message: string): { type: NotificationType; title: string } {
+  // First, because chat text can contain any of the words matched below.
+  if (/^New message/i.test(message)) return { type: "COMMENT_ADDED", title: "New message" };
+  if (/^Missed call/i.test(message)) return { type: "COMMENT_ADDED", title: "Missed call" };
   if (/^New job/i.test(message)) return { type: "ISSUE_ASSIGNED", title: "New job" };
   if (/^New .*report/i.test(message)) return { type: "ISSUE_CREATED", title: "New report" };
   if (/re-opened/i.test(message)) return { type: "STATUS_UPDATED", title: "Report re-opened" };

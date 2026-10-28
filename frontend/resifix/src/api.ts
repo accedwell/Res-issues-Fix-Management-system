@@ -1,4 +1,4 @@
-import type { AppNotification, Category, Issue, NewIssue, Priority, Role, Setting, Staff, Status } from './types'
+import type { AppNotification, Category, ChatMessage, Issue, NewIssue, Priority, Role, Setting, SimilarIssue, Staff, Status } from './types'
 
 // Backend address. By default it is the same computer the page was opened from, on port 5000,
 // so the app also works from a phone on the same Wi-Fi. Override with VITE_API_URL in a .env file.
@@ -121,7 +121,24 @@ export const fetchSettings = async () => (await request<{ settings: Setting[] }>
 
 // ===== Issues =====
 
+// The report's photo as a link the page can show. Loaded with the login token, like every request.
+export async function fetchIssuePhoto(id: string): Promise<string> {
+  const token = getToken()
+  const res = await fetch(`${API_URL}/issues/${id}/photo`, { headers: token ? { Authorization: 'Bearer ' + token } : {} })
+  if (!res.ok) throw new Error('The photo could not be loaded.')
+  return URL.createObjectURL(await res.blob())
+}
+
+export const fetchSimilarIssues = async (category: string, residence: string, room: string) =>
+  (
+    await request<{ similar: SimilarIssue[] }>(
+      'GET',
+      `/issues/similar?${new URLSearchParams({ category, residence, room })}`,
+    )
+  ).similar
 export const apiCreateIssue = async (issue: NewIssue) => (await request<{ issue: Issue }>('POST', '/issues', issue)).issue
+export const apiEditIssue = (id: string, changes: Omit<NewIssue, 'photo'>) => request('PATCH', `/issues/${id}`, changes)
+export const apiCancelIssue = (id: string) => request('DELETE', `/issues/${id}`)
 export const apiReceiveIssue = (id: string) => request('POST', `/issues/${id}/receive`)
 export const apiAssignIssue = (id: string, staffId: string, priority: Priority) =>
   request('POST', `/issues/${id}/assign`, { staffId, priority })
@@ -130,6 +147,11 @@ export const apiUpdateProgress = (id: string, status: Status, note: string) =>
 export const apiConfirmResolution = (id: string, rating: number | null, comment: string) =>
   request('POST', `/issues/${id}/confirm`, { rating, comment })
 export const apiReportNotFixed = (id: string, reason: string) => request('POST', `/issues/${id}/not-fixed`, { reason })
+
+// The chat on a report. Opening it marks the other person's messages as read.
+export const fetchChat = (id: string) => request<{ messages: ChatMessage[]; canSend: boolean }>('GET', `/issues/${id}/messages`)
+export const apiSendMessage = (id: string, body: string) =>
+  request<{ messages: ChatMessage[]; canSend: boolean }>('POST', `/issues/${id}/messages`, { body })
 
 // ===== Notifications =====
 
@@ -151,6 +173,9 @@ export interface NewUserInput {
 
 export const apiAddUser = (user: NewUserInput) => request('POST', '/users', user)
 export const apiRemoveUser = (id: string) => request<{ unassignedJobs: number }>('DELETE', `/users/${id}`)
+// Students: { block, room }. Maintenance staff: { specialization }.
+export const apiEditUser = (id: string, details: { block?: string; room?: string; specialization?: string }) =>
+  request('PATCH', `/users/${id}`, details)
 export const apiAddCategory = (name: string, icon: string) => request('POST', '/categories', { name, icon })
 export const apiEditCategory = (key: string, name: string, icon: string) =>
   request('PATCH', `/categories/${key}`, { name, icon })
@@ -161,21 +186,81 @@ export const apiSetSetting = (key: string, on: boolean) => request('PATCH', `/se
 
 export type Topic = 'issues' | 'notifications' | 'users' | 'staff' | 'categories' | 'settings'
 
+const RECONNECT_MS = 3000
+const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings']
+
 // Opens the server's live-update stream. Calls onChange with the kinds of data that changed.
-// The browser reconnects by itself if the connection drops. Returns a function that closes it.
-export function connectLiveUpdates(onChange: (topics: Topic[]) => void, onStatus: (connected: boolean) => void) {
-  const token = getToken()
-  if (!token || typeof EventSource === 'undefined') return () => {}
-  const source = new EventSource(`${API_URL}/events?token=${encodeURIComponent(token)}`)
-  source.onopen = () => onStatus(true)
-  source.onerror = () => onStatus(false)
-  source.onmessage = (e) => {
-    try {
-      const { topics } = JSON.parse(e.data) as { topics: Topic[] }
-      if (Array.isArray(topics)) onChange(topics)
-    } catch {
-      // Ignore anything that isn't a change message.
+// Voice-call messages ("call" events) are passed to onCall. Returns a function that closes it.
+// The stream is opened with a one-time ticket (not the login token, which would end up in the URL),
+// so after a dropped connection it reconnects with a fresh ticket, and catches up on what it missed.
+export function connectLiveUpdates(onChange: (topics: Topic[]) => void, onCall: (signal: CallSignal) => void) {
+  if (!getToken() || typeof EventSource === 'undefined') return () => {}
+  let source: EventSource | null = null
+  let retry: number | undefined
+  let closed = false
+  let missed = false
+
+  const open = async () => {
+    const ticket = await request<{ ticket: string }>('POST', '/events/ticket')
+      .then((r) => r.ticket)
+      .catch(() => null)
+    if (closed) return
+    if (!ticket) {
+      // Server unreachable: keep trying.
+      retry = window.setTimeout(() => void open(), RECONNECT_MS)
+      return
+    }
+    const s = new EventSource(`${API_URL}/events?ticket=${encodeURIComponent(ticket)}`)
+    source = s
+    s.onmessage = (e) => {
+      try {
+        const { topics } = JSON.parse(e.data) as { topics: Topic[] }
+        if (Array.isArray(topics)) onChange(topics)
+      } catch {
+        // Ignore anything that isn't a change message.
+      }
+    }
+    s.addEventListener('call', (e) => {
+      try {
+        onCall(JSON.parse((e as MessageEvent).data) as CallSignal)
+      } catch {
+        // Ignore a broken call message.
+      }
+    })
+    s.onopen = () => {
+      if (!missed) return
+      missed = false
+      onChange(ALL_TOPICS)
+    }
+    s.onerror = () => {
+      // The ticket is used up, so the browser's own retry would fail: start again with a new one.
+      s.close()
+      missed = true
+      if (!closed) retry = window.setTimeout(() => void open(), RECONNECT_MS)
     }
   }
-  return () => source.close()
+  void open()
+
+  return () => {
+    closed = true
+    clearTimeout(retry)
+    source?.close()
+  }
 }
+
+// ===== Voice calls =====
+
+export type CallSignalType = 'ring' | 'answer' | 'ice' | 'end' | 'decline' | 'busy' | 'missed'
+
+// A call message from the other person on a report. "from" is their name, or "Student" for maintenance.
+export interface CallSignal {
+  issueId: string
+  ref: string
+  from: string
+  type: CallSignalType
+  data: unknown
+}
+
+// Sends a call message to the other person. delivered is false when they are not on ResiFix right now.
+export const apiCallSignal = (issueId: string, type: CallSignalType, data?: unknown) =>
+  request<{ delivered: boolean }>('POST', `/calls/${issueId}`, { type, data })

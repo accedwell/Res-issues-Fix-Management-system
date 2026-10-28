@@ -1,11 +1,14 @@
 import { useState, type ChangeEvent } from 'react'
 import { Icon } from './Icon'
+import { IssuePhoto } from './IssuePhoto'
+import { ProgressSteps } from './ProgressSteps'
+import { ChatModal } from './Chat'
 import { useApp } from '../context/appContext'
 import { PasswordInput } from './PasswordInput'
 import {
-  BLOCKS, CATEGORY_ICONS, GENERAL_SPECIALIZATION, PRIORITIES, PRIORITY_CLASS, ROLE_NAMES, SPECIALIZATIONS, STATUS_CLASS,
+  BLOCKS, CATEGORY_ICONS, GENERAL_SPECIALIZATION, PRIORITIES, PRIORITY_CLASS, ROLE_NAMES, SHARED_PLACES, SPECIALIZATIONS, STATUS_CLASS,
 } from '../data/constants'
-import { canReportNotFixed, formatDate, isOpen, recommendStaff } from '../utils'
+import { canEditReport, canReportNotFixed, formatDate, isOpen, notResolvedReason, recommendStaff } from '../utils'
 import type { Category, Issue, Priority, Role, Status } from '../types'
 
 export function ModalHost() {
@@ -22,6 +25,9 @@ export function ModalHost() {
       break
     case 'removeUser':
       content = <RemoveUserModal userId={modal.userId} close={close} />
+      break
+    case 'editUser':
+      content = <EditUserModal userId={modal.userId} close={close} />
       break
     case 'addCategory':
       content = <AddCategoryModal close={close} />
@@ -40,6 +46,9 @@ export function ModalHost() {
         update: <UpdateModal issue={issue} close={close} />,
         feedback: <FeedbackModal issue={issue} />,
         notfixed: <NotFixedModal issue={issue} close={close} />,
+        editReport: <EditReportModal issue={issue} close={close} />,
+        cancelReport: <CancelReportModal issue={issue} close={close} />,
+        chat: <ChatModal issue={issue} close={close} />,
       }[modal.type]
   }
 
@@ -66,6 +75,8 @@ function DetailModal({ issue, close }: IssueModalProps) {
   const isAdmin = auth.role === 'admin'
   const category = catInfo(issue.category)
   const assignedName = issue.assignedToName ?? staffList.find((s) => s.id === issue.assignedTo)?.name
+  const notResolved = notResolvedReason(issue)
+  const studentCanEdit = canEditReport(issue, auth)
   const studentCanReopen = auth.role === 'student' && issue.studentId === auth.studentId && canReportNotFixed(issue)
 
   return (
@@ -86,12 +97,28 @@ function DetailModal({ issue, close }: IssueModalProps) {
           <Icon name={category.icon} /> {category.name}
         </span>
       </div>
+      <div style={{ margin: '4px 0 16px' }}>
+        <ProgressSteps issue={issue} />
+      </div>
+      {notResolved && (
+        <div className="not-resolved-box">
+          <b>
+            <Icon name="x" /> {assignedName ?? 'Maintenance'} could not fix this yet
+          </b>
+          <p>“{notResolved.reason}”</p>
+          <span>
+            {formatDate(notResolved.date)}
+            {studentCanReopen ? ' · If it is still a problem, use “Still not fixed” below to push it again.' : ''}
+          </span>
+        </div>
+      )}
       {issue.reopened ? (
         <div className="field-error" style={{ margin: '0 0 10px', fontWeight: 700 }}>
           Re-opened {issue.reopened}× — student reported it was not fixed.
         </div>
       ) : null}
       <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.55 }}>{issue.description}</p>
+      <IssuePhoto issue={issue} />
       <table className="simple" style={{ marginBottom: 14 }}>
         <tbody>
           <tr>
@@ -102,10 +129,13 @@ function DetailModal({ issue, close }: IssueModalProps) {
             <td>Room / Location</td>
             <td>{issue.room}</td>
           </tr>
-          <tr>
-            <td>Reported by</td>
-            <td>{issue.studentName}</td>
-          </tr>
+          {/* Maintenance staff are not sent the student's name, so their ratings stay anonymous. */}
+          {issue.studentName && (
+            <tr>
+              <td>Reported by</td>
+              <td>{issue.studentName}</td>
+            </tr>
+          )}
           <tr>
             <td>Date reported</td>
             <td>{formatDate(issue.dateReported)}</td>
@@ -113,10 +143,6 @@ function DetailModal({ issue, close }: IssueModalProps) {
           <tr>
             <td>Assigned to</td>
             <td>{assignedName || '—'}</td>
-          </tr>
-          <tr>
-            <td>Photo</td>
-            <td>{issue.photo ? 'Attached' : 'None'}</td>
           </tr>
         </tbody>
       </table>
@@ -141,6 +167,12 @@ function DetailModal({ issue, close }: IssueModalProps) {
         </div>
       )}
       <div className="modal-actions">
+        {issue.chat && (
+          <button className="btn btn-ghost" onClick={() => setModal({ type: 'chat', issueId: issue.id })}>
+            <Icon name="chat" /> {issue.chat.canSend ? 'Chat' : 'View chat'}
+            {issue.chat.unread > 0 && <span className="chat-badge inline">{issue.chat.unread}</span>}
+          </button>
+        )}
         {isAdmin && issue.status === 'Submitted' && (
           <button
             className="btn btn-ghost"
@@ -157,6 +189,16 @@ function DetailModal({ issue, close }: IssueModalProps) {
           <button className="btn btn-primary" onClick={() => setModal({ type: 'assign', issueId: issue.id })}>
             {issue.assignedTo ? 'Reassign' : 'Assign'}
           </button>
+        )}
+        {studentCanEdit && (
+          <>
+            <button className="btn btn-ghost" onClick={() => setModal({ type: 'cancelReport', issueId: issue.id })}>
+              <Icon name="x" /> Cancel report
+            </button>
+            <button className="btn btn-primary" onClick={() => setModal({ type: 'editReport', issueId: issue.id })}>
+              Edit report
+            </button>
+          </>
         )}
         {studentCanReopen && (
           <button className="btn btn-ghost" onClick={() => setModal({ type: 'notfixed', issueId: issue.id })}>
@@ -362,6 +404,126 @@ function FeedbackModal({ issue }: { issue: Issue }) {
   )
 }
 
+// The student fixes a mistake in their report before the admin has received it.
+function EditReportModal({ issue, close }: IssueModalProps) {
+  const { editReport, categories, auth } = useApp()
+  // Their own room, the shared places, and whatever the report already says (older reports).
+  const places = [...new Set([auth.room, ...SHARED_PLACES, issue.room].filter((p): p is string => !!p))]
+  const [form, setForm] = useState({
+    title: issue.title,
+    category: issue.category,
+    priority: issue.priority,
+    residence: issue.residence,
+    room: issue.room,
+    description: issue.description,
+  })
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const field = (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  const save = async () => {
+    if (!form.title.trim() || !form.room.trim() || !form.description.trim()) return setError('Please fill in the title, room and description.')
+    setBusy(true)
+    if (!(await editReport(issue, form))) setBusy(false)
+  }
+
+  return (
+    <div className="modal">
+      <h3>Edit report</h3>
+      <p className="modal-sub">
+        {issue.ref} — you can change it until the residence admin receives it.
+      </p>
+      <div className="field">
+        <label>Short title</label>
+        <input type="text" value={form.title} onChange={field('title')} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div className="field">
+          <label>Category</label>
+          <select value={form.category} onChange={field('category')}>
+            {categories.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Priority</label>
+          <select value={form.priority} onChange={field('priority')}>
+            {PRIORITIES.map((p) => (
+              <option key={p}>{p}</option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Block</label>
+          {/* Students report only in their own block, so it cannot be changed here. */}
+          <input type="text" value={form.residence} readOnly className="locked" />
+        </div>
+        <div className="field">
+          <label>Room / location</label>
+          <select value={form.room} onChange={field('room')}>
+            {places.map((p) => (
+              <option key={p} value={p}>
+                {p === auth.room ? `Room ${p} (your room)` : p}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="field">
+        <label>What's happening?</label>
+        <textarea value={form.description} onChange={field('description')} />
+      </div>
+      {error && <div className="field-error">{error}</div>}
+      <div className="modal-actions">
+        <button className="btn btn-ghost" onClick={close}>
+          Cancel
+        </button>
+        <button className="btn btn-primary" disabled={busy} onClick={save}>
+          <Icon name="check" /> {busy ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Asks before removing the report for good.
+function CancelReportModal({ issue, close }: IssueModalProps) {
+  const { cancelReport } = useApp()
+  const [busy, setBusy] = useState(false)
+
+  return (
+    <div className="modal">
+      <h3>Cancel this report?</h3>
+      <p className="modal-sub">
+        {issue.ref} — {issue.title}
+      </p>
+      <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.55 }}>
+        The report will be removed and the residence admin will be told it was cancelled. This can't be undone — if the
+        problem comes back, report it again.
+      </p>
+      <div className="modal-actions">
+        <button className="btn btn-ghost" onClick={close}>
+          Keep report
+        </button>
+        <button
+          className="btn btn-danger"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true)
+            if (!(await cancelReport(issue))) setBusy(false)
+          }}
+        >
+          {busy ? 'Cancelling…' : 'Yes, cancel report'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function NotFixedModal({ issue, close }: IssueModalProps) {
   const { reportNotFixed } = useApp()
   const [reason, setReason] = useState('')
@@ -504,6 +666,75 @@ function AddUserModal({ close }: { close: () => void }) {
         </button>
         <button className="btn btn-primary" disabled={busy} onClick={submit}>
           <Icon name="check" /> {busy ? 'Adding…' : 'Add user'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Corrects a mistake in an account: a student's block and room, or a staff member's job type.
+// Name, email, student number and password are not editable here.
+function EditUserModal({ userId, close }: { userId: string; close: () => void }) {
+  const { users, editUser } = useApp()
+  const user = users.find((u) => u.id === userId)
+  const [form, setForm] = useState({
+    block: user?.block ?? BLOCKS[0],
+    room: user?.room ?? '',
+    specialization: user?.specialization ?? GENERAL_SPECIALIZATION,
+  })
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const field = (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  if (!user) return null
+  const isStudent = user.kind === 'student'
+
+  const submit = async () => {
+    if (isStudent && !form.room.trim()) return setError('Please fill in the room.')
+    setBusy(true)
+    const details = isStudent ? { block: form.block, room: form.room.trim() } : { specialization: form.specialization }
+    if (!(await editUser(userId, details))) setBusy(false)
+  }
+
+  return (
+    <div className="modal">
+      <h3>Edit {user.name}</h3>
+      <p className="modal-sub">
+        {isStudent ? 'Correct the block or room this student registered with.' : 'Change the kind of jobs this staff member handles.'}
+      </p>
+      {isStudent ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="field">
+            <label>Block</label>
+            <select value={form.block} onChange={field('block')}>
+              {BLOCKS.map((b) => (
+                <option key={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Room</label>
+            <input type="text" value={form.room} onChange={field('room')} placeholder="e.g. 204" />
+          </div>
+        </div>
+      ) : (
+        <div className="field">
+          <label>Job type</label>
+          <select value={form.specialization} onChange={field('specialization')}>
+            {[...new Set([...SPECIALIZATIONS, form.specialization])].map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {error && <div className="field-error">{error}</div>}
+      <div className="modal-actions">
+        <button className="btn btn-ghost" onClick={close}>
+          Cancel
+        </button>
+        <button className="btn btn-primary" disabled={busy} onClick={submit}>
+          <Icon name="check" /> {busy ? 'Saving…' : 'Save changes'}
         </button>
       </div>
     </div>
