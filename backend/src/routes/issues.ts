@@ -91,8 +91,10 @@ issuesRouter.get("/", async (req, res) => {
 // so a student can see it was already reported before reporting it again. No names are included.
 issuesRouter.get("/similar", async (req, res) => {
   const q = req.query as Record<string, string | undefined>;
-  if (!q.category || !q.residence) throw badRequest("Category and block are needed");
-  res.json({ similar: await findSimilarOpen(currentUser(req), q.category, q.residence, q.room ?? "") });
+  // Students only ever look in their own block.
+  const residence = currentUser(req).role === "student" ? currentUser(req).block : q.residence;
+  if (!q.category || !residence) throw badRequest("Category and block are needed");
+  res.json({ similar: await findSimilarOpen(currentUser(req), q.category, residence, q.room ?? "") });
 });
 
 // GET /api/issues/:id
