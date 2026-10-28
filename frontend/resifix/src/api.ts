@@ -186,29 +186,66 @@ export const apiSetSetting = (key: string, on: boolean) => request('PATCH', `/se
 
 export type Topic = 'issues' | 'notifications' | 'users' | 'staff' | 'categories' | 'settings'
 
+const RECONNECT_MS = 3000
+const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings']
+
 // Opens the server's live-update stream. Calls onChange with the kinds of data that changed.
-// The browser reconnects by itself if the connection drops. Returns a function that closes it.
-// Voice-call messages ("call" events) are passed to onCall.
+// Voice-call messages ("call" events) are passed to onCall. Returns a function that closes it.
+// The stream is opened with a one-time ticket (not the login token, which would end up in the URL),
+// so after a dropped connection it reconnects with a fresh ticket, and catches up on what it missed.
 export function connectLiveUpdates(onChange: (topics: Topic[]) => void, onCall: (signal: CallSignal) => void) {
-  const token = getToken()
-  if (!token || typeof EventSource === 'undefined') return () => {}
-  const source = new EventSource(`${API_URL}/events?token=${encodeURIComponent(token)}`)
-  source.onmessage = (e) => {
-    try {
-      const { topics } = JSON.parse(e.data) as { topics: Topic[] }
-      if (Array.isArray(topics)) onChange(topics)
-    } catch {
-      // Ignore anything that isn't a change message.
+  if (!getToken() || typeof EventSource === 'undefined') return () => {}
+  let source: EventSource | null = null
+  let retry: number | undefined
+  let closed = false
+  let missed = false
+
+  const open = async () => {
+    const ticket = await request<{ ticket: string }>('POST', '/events/ticket')
+      .then((r) => r.ticket)
+      .catch(() => null)
+    if (closed) return
+    if (!ticket) {
+      // Server unreachable: keep trying.
+      retry = window.setTimeout(() => void open(), RECONNECT_MS)
+      return
+    }
+    const s = new EventSource(`${API_URL}/events?ticket=${encodeURIComponent(ticket)}`)
+    source = s
+    s.onmessage = (e) => {
+      try {
+        const { topics } = JSON.parse(e.data) as { topics: Topic[] }
+        if (Array.isArray(topics)) onChange(topics)
+      } catch {
+        // Ignore anything that isn't a change message.
+      }
+    }
+    s.addEventListener('call', (e) => {
+      try {
+        onCall(JSON.parse((e as MessageEvent).data) as CallSignal)
+      } catch {
+        // Ignore a broken call message.
+      }
+    })
+    s.onopen = () => {
+      if (!missed) return
+      missed = false
+      onChange(ALL_TOPICS)
+    }
+    s.onerror = () => {
+      // The ticket is used up, so the browser's own retry would fail: start again with a new one.
+      s.close()
+      missed = true
+      if (!closed) retry = window.setTimeout(() => void open(), RECONNECT_MS)
     }
   }
-  source.addEventListener('call', (e) => {
-    try {
-      onCall(JSON.parse((e as MessageEvent).data) as CallSignal)
-    } catch {
-      // Ignore a broken call message.
-    }
-  })
-  return () => source.close()
+  void open()
+
+  return () => {
+    closed = true
+    clearTimeout(retry)
+    source?.close()
+  }
 }
 
 // ===== Voice calls =====

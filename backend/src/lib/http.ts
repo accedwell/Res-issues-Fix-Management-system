@@ -68,3 +68,7 @@ export function requirePassword(body: Body, field = "password"): string {
 }
 
 export const today = () => new Date().toISOString().slice(0, 10);
+
+// Testing helpers (reset codes shown on screen, phones on the same Wi-Fi allowed) are switched on
+// only when .env says DEV_MODE=true, and never in production. Forgetting a setting keeps them off.
+export const isDevMode = () => process.env.DEV_MODE === "true" && process.env.NODE_ENV !== "production";

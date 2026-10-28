@@ -28,7 +28,8 @@ const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const DEV_SECRET = "dev-only-secret-change-me";
 const MIN_SECRET_LENGTH = 32;
 
-if (!process.env.TOKEN_SECRET || process.env.TOKEN_SECRET.length < MIN_SECRET_LENGTH) {
+// The placeholder from .env.example counts as not set.
+if (!process.env.TOKEN_SECRET || process.env.TOKEN_SECRET.length < MIN_SECRET_LENGTH || process.env.TOKEN_SECRET.startsWith("change-me")) {
   const problem = `TOKEN_SECRET in .env must be set to a random value of at least ${MIN_SECRET_LENGTH} characters.`;
   if (process.env.NODE_ENV === "production") throw new Error(problem);
   console.warn(`WARNING: ${problem} Using an insecure development secret.`);

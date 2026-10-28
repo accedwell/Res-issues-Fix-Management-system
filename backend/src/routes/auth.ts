@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { currentUser, requireAuth } from "../middleware/auth.js";
-import { badRequest, HttpError, optionalString, requireEmail, requirePassword, requireString } from "../lib/http.js";
+import { badRequest, HttpError, isDevMode, optionalString, requireEmail, requirePassword, requireString } from "../lib/http.js";
 import { byEmail, rateLimit } from "../lib/rateLimit.js";
 import { createToken, hashPassword, verifyPassword } from "../lib/security.js";
 import { newId } from "../store/db.js";
@@ -62,7 +62,7 @@ authRouter.post("/login", loginLimit, async (req, res) => {
 });
 
 // POST /api/auth/forgot-password — { email }. Always answers the same way, so it can't be used
-// to find out which emails have accounts. Email sending isn't set up yet, so outside production
+// to find out which emails have accounts. Email sending isn't set up yet, so with DEV_MODE=true
 // the code is printed in the server console and returned as devCode for testing.
 authRouter.post("/forgot-password", resetRequestLimit, async (req, res) => {
   const email = requireEmail(req.body ?? {});
@@ -75,7 +75,7 @@ authRouter.post("/forgot-password", resetRequestLimit, async (req, res) => {
   }
 
   const code = await createResetCode(user.id);
-  if (process.env.NODE_ENV === "production") {
+  if (!isDevMode()) {
     res.json({ message });
     return;
   }

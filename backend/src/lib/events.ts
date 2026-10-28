@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import { readToken } from "./security.js";
+import { randomBytes } from "node:crypto";
+import { currentUser } from "../middleware/auth.js";
 import { getUser } from "../store/users.js";
 
 // Live updates over Server-Sent Events. Every logged-in browser keeps one connection open;
@@ -11,10 +12,31 @@ export type Topic = "issues" | "notifications" | "users" | "staff" | "categories
 // Each open connection and the user it belongs to.
 const clients = new Map<Response, string>();
 
-// GET /api/events?token=... (EventSource can't send headers, so the login token comes in the URL).
+// EventSource can't send headers, so the browser first gets a ticket (with its login token, the
+// normal way) and puts that in the URL instead. A ticket works once, within a minute, so one that
+// ends up in a log or browser history is useless.
+const TICKET_TTL_MS = 60 * 1000;
+const tickets = new Map<string, { userId: string; expiresAt: number }>();
+
+// POST /api/events/ticket (behind requireAuth).
+export function ticketHandler(req: Request, res: Response) {
+  const now = Date.now();
+  for (const [t, v] of tickets) if (v.expiresAt <= now) tickets.delete(t);
+  const ticket = randomBytes(24).toString("base64url");
+  tickets.set(ticket, { userId: currentUser(req).id, expiresAt: now + TICKET_TTL_MS });
+  res.json({ ticket });
+}
+
+function useTicket(ticket: string): string | null {
+  const found = tickets.get(ticket);
+  tickets.delete(ticket);
+  return found && found.expiresAt > Date.now() ? found.userId : null;
+}
+
+// GET /api/events?ticket=...
 export async function eventsHandler(req: Request, res: Response) {
-  const token = typeof req.query.token === "string" ? req.query.token : "";
-  const userId = token ? readToken(token) : null;
+  const ticket = typeof req.query.ticket === "string" ? req.query.ticket : "";
+  const userId = ticket ? useTicket(ticket) : null;
   if (!userId || !(await getUser(userId))) {
     res.status(401).json({ error: "Please log in to continue" });
     return;

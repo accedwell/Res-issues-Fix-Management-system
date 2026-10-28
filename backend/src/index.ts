@@ -1,10 +1,12 @@
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import "dotenv/config";
 import prisma from "./lib/prisma.js";
-import { broadcast, broadcastChanges, eventsHandler } from "./lib/events.js";
-import { errorHandler } from "./lib/http.js";
+import { broadcast, broadcastChanges, eventsHandler, ticketHandler } from "./lib/events.js";
+import { errorHandler, isDevMode } from "./lib/http.js";
+import { requireAuth } from "./middleware/auth.js";
 import { authRouter } from "./routes/auth.js";
 import { callsRouter } from "./routes/calls.js";
 import { categoriesRouter } from "./routes/categories.js";
@@ -22,18 +24,21 @@ const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173,http://
   .split(",")
   .map((origin) => origin.trim());
 
-// Outside production, also allow the app opened from another device on the same network
-// (e.g. a phone visiting http://192.168.0.238:5173).
+// With DEV_MODE=true in .env (and never in production), also allow the app opened from another
+// device on the same network (e.g. a phone visiting http://192.168.0.238:5173).
 const LOCAL_NETWORK = /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
-const isAllowedOrigin = (origin: string) =>
-  allowedOrigins.includes(origin) || (process.env.NODE_ENV !== "production" && LOCAL_NETWORK.test(origin));
+const isAllowedOrigin = (origin: string) => allowedOrigins.includes(origin) || (isDevMode() && LOCAL_NETWORK.test(origin));
 
+// Standard browser protection headers. The API only sends JSON and photos, so the page itself
+// (served by Vite or the web host) is not affected; photos are shown on the frontend's address.
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors({ origin: (origin, done) => done(null, !origin || isAllowedOrigin(origin)) }));
 // Room for one report photo (up to 5 MB, sent as base64).
 app.use(express.json({ limit: "8mb" }));
 app.use(broadcastChanges);
 
 // Live updates for every logged-in browser.
+app.post("/api/events/ticket", requireAuth, ticketHandler);
 app.get("/api/events", eventsHandler);
 
 app.get("/api/health", (_req, res) => {
