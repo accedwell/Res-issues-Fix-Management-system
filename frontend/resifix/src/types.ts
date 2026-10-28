@@ -72,6 +72,8 @@ export interface Issue {
   history: HistoryEntry[]
   feedback: Feedback | null
   reopened?: number
+  // Sent by the server when the viewer may see the chat on this report (see Chat.tsx).
+  chat?: ChatSummary | null
 }
 
 export interface NewIssue {
@@ -152,10 +154,26 @@ export interface NavItem {
 }
 
 export type Modal =
-  | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed' | 'editReport' | 'cancelReport'; issueId: string }
+  | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed' | 'editReport' | 'cancelReport' | 'chat'; issueId: string }
   | { type: 'addUser' }
   | { type: 'removeUser'; userId: string }
   | { type: 'editUser'; userId: string }
   | { type: 'addCategory' }
   | { type: 'editCategory'; categoryKey: string }
   | { type: 'removeCategory'; categoryKey: string }
+
+// Chat on a report between the student and the assigned staff member. Admins can only read it.
+export interface ChatSummary {
+  canSend: boolean
+  total: number
+  unread: number
+}
+
+export interface ChatMessage {
+  id: string
+  body: string
+  at: string // ISO time
+  mine: boolean
+  // "You", the staff member's name, or "Student" (maintenance never sees the student's name).
+  from: string
+}

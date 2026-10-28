@@ -74,6 +74,7 @@ model User {
   notifications  Notification[]
   historyEntries IssueHistory[]
   feedback       IssueFeedback[]
+  messages       IssueMessage[]
   passwordReset  PasswordReset?
 
   @@index([role])
@@ -140,6 +141,7 @@ model MaintenanceIssue {
   history  IssueHistory[]
   feedback IssueFeedback?
   photo    IssuePhoto?
+  messages IssueMessage[]
 
   @@index([status])
   @@index([priority])
@@ -164,6 +166,23 @@ model IssuePhoto {
   issue MaintenanceIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
   @@map("issue_photos")
+}
+
+// Chat on a report between the student and the staff member assigned to it.
+model IssueMessage {
+  id        String   @id @default(cuid())
+  issueId   String   @map("issue_id")
+  senderId  String   @map("sender_id")
+  body      String   @db.Text
+  // Whether the other person (the one who did not send it) has seen it.
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue  MaintenanceIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  sender User             @relation(fields: [senderId], references: [id], onDelete: Restrict)
+
+  @@index([issueId, createdAt])
+  @@map("issue_messages")
 }
 
 model IssueHistory {

@@ -2,6 +2,7 @@ import { useState, type ChangeEvent } from 'react'
 import { Icon } from './Icon'
 import { IssuePhoto } from './IssuePhoto'
 import { ProgressSteps } from './ProgressSteps'
+import { ChatModal } from './Chat'
 import { useApp } from '../context/appContext'
 import { PasswordInput } from './PasswordInput'
 import {
@@ -47,6 +48,7 @@ export function ModalHost() {
         notfixed: <NotFixedModal issue={issue} close={close} />,
         editReport: <EditReportModal issue={issue} close={close} />,
         cancelReport: <CancelReportModal issue={issue} close={close} />,
+        chat: <ChatModal issue={issue} close={close} />,
       }[modal.type]
   }
 
@@ -165,6 +167,12 @@ function DetailModal({ issue, close }: IssueModalProps) {
         </div>
       )}
       <div className="modal-actions">
+        {issue.chat && (
+          <button className="btn btn-ghost" onClick={() => setModal({ type: 'chat', issueId: issue.id })}>
+            <Icon name="chat" /> {issue.chat.canSend ? 'Chat' : 'View chat'}
+            {issue.chat.unread > 0 && <span className="chat-badge inline">{issue.chat.unread}</span>}
+          </button>
+        )}
         {isAdmin && issue.status === 'Submitted' && (
           <button
             className="btn btn-ghost"

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { CallManager } from './CallManager'
 import { Icon } from './Icon'
 import { ModalHost } from './Modals'
 import { NotificationBell } from './NotificationBell'
@@ -101,6 +102,8 @@ export function AppShell() {
         </div>
       </div>
       <ModalHost />
+      {/* Voice calls work on any page, so an incoming call can ring wherever the person is. */}
+      {(role === 'student' || role === 'maintenance') && <CallManager />}
       {toast && (
         <div key={toast.id} className="toast" role="status">
           {toast.msg}

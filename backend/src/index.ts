@@ -6,6 +6,7 @@ import prisma from "./lib/prisma.js";
 import { broadcast, broadcastChanges, eventsHandler } from "./lib/events.js";
 import { errorHandler } from "./lib/http.js";
 import { authRouter } from "./routes/auth.js";
+import { callsRouter } from "./routes/calls.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { issuesRouter } from "./routes/issues.js";
 import { notificationsRouter } from "./routes/notifications.js";
@@ -59,6 +60,7 @@ app.get("/api/health/db", async (_req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/issues", issuesRouter);
+app.use("/api/calls", callsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/categories", categoriesRouter);

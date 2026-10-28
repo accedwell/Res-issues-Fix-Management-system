@@ -7,6 +7,7 @@ import {
   fetchStaff, fetchUsers, getToken, type ApiUser, type Topic,
 } from '../api'
 import { CATEGORIES, DEFAULT_FILTERS, DEFAULT_TABS, ROLE_NAMES } from '../data/constants'
+import { emitCallSignal } from '../callBus'
 import { isForUser } from '../utils'
 import type { AppNotification, Auth, Category, Filters, Issue, Modal, Role, Route, Setting, Staff, User } from '../types'
 
@@ -140,7 +141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Live updates: reload whatever changed as soon as any user saves something.
   useEffect(() => {
     if (!auth.loggedIn) return
-    const close = connectLiveUpdates((topics) => void refresh(topics))
+    const close = connectLiveUpdates((topics) => void refresh(topics), emitCallSignal)
     // Catch up after the tab was in the background or the connection dropped.
     const onFocus = () => void refresh(ALL_TOPICS)
     window.addEventListener('focus', onFocus)
@@ -180,6 +181,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     restoring,
     ready,
     login: (name, role, userId, home) => void startSession(name, role, userId, true, home),
+    refreshIssues: () => void refresh(['issues', 'notifications']),
     logout: endSession,
     tabs,
     setTab,

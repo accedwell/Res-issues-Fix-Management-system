@@ -1,4 +1,4 @@
-import type { AppNotification, Category, Issue, NewIssue, Priority, Role, Setting, SimilarIssue, Staff, Status } from './types'
+import type { AppNotification, Category, ChatMessage, Issue, NewIssue, Priority, Role, Setting, SimilarIssue, Staff, Status } from './types'
 
 // Backend address. By default it is the same computer the page was opened from, on port 5000,
 // so the app also works from a phone on the same Wi-Fi. Override with VITE_API_URL in a .env file.
@@ -148,6 +148,11 @@ export const apiConfirmResolution = (id: string, rating: number | null, comment:
   request('POST', `/issues/${id}/confirm`, { rating, comment })
 export const apiReportNotFixed = (id: string, reason: string) => request('POST', `/issues/${id}/not-fixed`, { reason })
 
+// The chat on a report. Opening it marks the other person's messages as read.
+export const fetchChat = (id: string) => request<{ messages: ChatMessage[]; canSend: boolean }>('GET', `/issues/${id}/messages`)
+export const apiSendMessage = (id: string, body: string) =>
+  request<{ messages: ChatMessage[]; canSend: boolean }>('POST', `/issues/${id}/messages`, { body })
+
 // ===== Notifications =====
 
 export const apiReadAllNotifications = () => request('POST', '/notifications/read-all')
@@ -183,7 +188,8 @@ export type Topic = 'issues' | 'notifications' | 'users' | 'staff' | 'categories
 
 // Opens the server's live-update stream. Calls onChange with the kinds of data that changed.
 // The browser reconnects by itself if the connection drops. Returns a function that closes it.
-export function connectLiveUpdates(onChange: (topics: Topic[]) => void) {
+// Voice-call messages ("call" events) are passed to onCall.
+export function connectLiveUpdates(onChange: (topics: Topic[]) => void, onCall: (signal: CallSignal) => void) {
   const token = getToken()
   if (!token || typeof EventSource === 'undefined') return () => {}
   const source = new EventSource(`${API_URL}/events?token=${encodeURIComponent(token)}`)
@@ -195,5 +201,29 @@ export function connectLiveUpdates(onChange: (topics: Topic[]) => void) {
       // Ignore anything that isn't a change message.
     }
   }
+  source.addEventListener('call', (e) => {
+    try {
+      onCall(JSON.parse((e as MessageEvent).data) as CallSignal)
+    } catch {
+      // Ignore a broken call message.
+    }
+  })
   return () => source.close()
 }
+
+// ===== Voice calls =====
+
+export type CallSignalType = 'ring' | 'answer' | 'ice' | 'end' | 'decline' | 'busy' | 'missed'
+
+// A call message from the other person on a report. "from" is their name, or "Student" for maintenance.
+export interface CallSignal {
+  issueId: string
+  ref: string
+  from: string
+  type: CallSignalType
+  data: unknown
+}
+
+// Sends a call message to the other person. delivered is false when they are not on ResiFix right now.
+export const apiCallSignal = (issueId: string, type: CallSignalType, data?: unknown) =>
+  request<{ delivered: boolean }>('POST', `/calls/${issueId}`, { type, data })

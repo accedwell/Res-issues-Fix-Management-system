@@ -635,6 +635,51 @@ table.simple tbody tr:hover td { background: rgba(77, 143, 240, .06); }
 .rating-pill.low { background: var(--bad-bg); color: var(--bad) !important; box-shadow: inset 0 0 0 1px rgba(255, 122, 122, .35); }
 .hotspot-row.low-rating { box-shadow: inset 3px 0 0 var(--bad); }
 
+/* Chat on a report: the icon on rows, and the WhatsApp-style window */
+.issue-status { display: inline-flex; align-items: center; gap: 8px; }
+.chat-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: transparent; color: var(--ink-soft); cursor: pointer; transition: border-color .2s, color .2s, background .2s; }
+.chat-btn svg { width: 17px; height: 17px; }
+.chat-btn:hover, .chat-btn.has-unread { border-color: rgba(95, 224, 198, .5); color: var(--mint-soft); background: rgba(34, 199, 169, .1); }
+.chat-badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--mint); color: #04122b; font-size: 10.5px; font-weight: 800; line-height: 18px; text-align: center; }
+.chat-badge.inline { position: static; margin-left: 4px; }
+.chat-modal { max-width: 460px; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.chat-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
+.chat-top h3 { margin: 2px 0 0; font-size: 16px; }
+.chat-ref { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+.chat-body { flex: 1; min-height: 260px; max-height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 16px 20px; background: var(--bg); }
+.chat-empty { margin: auto; max-width: 280px; text-align: center; font-size: 13px; color: var(--ink-soft); }
+.chat-msg { align-self: flex-start; max-width: 80%; padding: 8px 12px 6px; border-radius: 14px 14px 14px 4px; background: var(--card); }
+.chat-msg.mine { align-self: flex-end; border-radius: 14px 14px 4px 14px; background: rgba(34, 199, 169, .2); }
+.chat-msg p { margin: 0; font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-from { display: block; margin-bottom: 2px; font-size: 11px; font-weight: 800; color: var(--mint-soft); }
+.chat-msg time { display: block; margin-top: 3px; font-size: 10.5px; color: var(--ink-faint); text-align: right; }
+.chat-send { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); }
+.chat-send input { flex: 1; min-width: 0; padding: 11px 14px; border-radius: 999px; border: 1px solid var(--border); background: rgba(5, 15, 38, .7); color: var(--ink); font: inherit; font-size: 14px; }
+.chat-send input:focus { outline: none; border-color: var(--mint); }
+.chat-send .btn { width: 44px; height: 44px; padding: 0; border-radius: 50%; justify-content: center; }
+.chat-readonly { margin: 0; padding: 12px 20px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--ink-soft); text-align: center; }
+.chat-modal > .field-error { margin: 8px 20px 0; }
+.chat-top-actions { display: inline-flex; gap: 6px; }
+
+/* Voice call: a floating panel that stays on screen on every page */
+.call-panel { position: fixed; right: 20px; bottom: 20px; z-index: 200; display: flex; align-items: center; gap: 14px; width: min(360px, calc(100vw - 32px)); padding: 14px 16px; border-radius: var(--r-lg); background: var(--panel); border: 1px solid rgba(95, 224, 198, .45); box-shadow: var(--shadow-lg); animation: modalIn .3s var(--ease) both; }
+.call-panel.ringing { border-color: var(--mint); }
+.call-panel.notice { gap: 10px; font-size: 13px; color: var(--ink-soft); border-color: var(--border); }
+.call-panel.notice svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--mint-soft); }
+.call-avatar { flex: 0 0 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--grad-brand); color: #04122b; }
+.call-avatar svg { width: 20px; height: 20px; }
+.call-panel.ringing .call-avatar, .call-panel.calling .call-avatar { animation: pulse 1.6s infinite; }
+.call-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.call-info b { font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.call-info span { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.call-actions { display: flex; gap: 8px; }
+.call-btn { width: 42px; height: 42px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--card); color: var(--ink); cursor: pointer; }
+.call-btn svg { width: 18px; height: 18px; }
+.call-btn.on { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+.call-btn.accept { background: var(--good); color: #04122b; border-color: transparent; }
+.call-btn.decline { background: var(--bad); color: #fff; border-color: transparent; }
+@media (max-width: 640px) { .call-panel { right: 16px; left: 16px; bottom: 16px; width: auto; } }
+
 /* Reported vs. fixed trend chart (admin reports). Colours validated for colour-blind readers on the dark card. */
 .trend-card { --series-reported: #4d8ff0; --series-fixed: #14a58b; }
 .trend-num { font-variant-numeric: tabular-nums; color: var(--ink); }

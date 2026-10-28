@@ -2,6 +2,7 @@ import { Router, type Request } from "express";
 import { currentUser, requireAuth, requireRole } from "../middleware/auth.js";
 import { badRequest, notFound, optionalString, requireOneOf, requireString } from "../lib/http.js";
 import { recommendStaff, staffWorkload } from "../services/assignment.js";
+import { chatSummaries, getChat, sendMessage } from "../services/chat.js";
 import {
   assignIssue,
   confirmResolution,
@@ -24,15 +25,20 @@ import { PRIORITIES, SHARED_PLACES, type Issue, type Priority } from "../types.j
 export const issuesRouter = Router();
 issuesRouter.use(requireAuth);
 
-// Adds the assigned staff member's name, so every role can show who is working on it.
+type ChatSummaries = Awaited<ReturnType<typeof chatSummaries>>;
+
+// Adds the assigned staff member's name, so every role can show who is working on it, and the chat
+// summary (can send, unread count) when the viewer may see the chat.
 // Maintenance staff never get the student's name or id, so they cannot tell who rated them.
-async function present(req: Request, issue: Issue) {
+async function present(req: Request, issue: Issue, chats?: ChatSummaries) {
   const staff = issue.assignedTo ? await getUser(issue.assignedTo) : undefined;
   const hideStudent = currentUser(req).role === "maintenance";
+  const chat = (chats ?? (await chatSummaries(currentUser(req), [issue]))).get(issue.id) ?? null;
   return {
     ...issue,
     ...(hideStudent ? { studentId: "", studentName: "" } : {}),
     assignedToName: staff?.name ?? null,
+    chat,
   };
 }
 
@@ -77,7 +83,8 @@ issuesRouter.get("/", async (req, res) => {
     residence: q.residence,
     search: q.search,
   });
-  res.json({ issues: await Promise.all(issues.map((issue) => present(req, issue))) });
+  const chats = await chatSummaries(currentUser(req), issues);
+  res.json({ issues: await Promise.all(issues.map((issue) => present(req, issue, chats))) });
 });
 
 // GET /api/issues/similar?category=&residence=&room= — open reports of the same kind in that block,
@@ -185,4 +192,16 @@ issuesRouter.post("/:id/confirm", requireRole("student"), async (req, res) => {
 issuesRouter.post("/:id/not-fixed", requireRole("student"), async (req, res) => {
   const reason = requireString(req.body ?? {}, "reason", "Reason");
   res.json({ issue: await present(req, await reportNotFixed(currentUser(req), param(req.params.id), reason)) });
+});
+
+// GET /api/issues/:id/messages — the chat between the student and the assigned staff member.
+// Opening it marks the other person's messages as read.
+issuesRouter.get("/:id/messages", async (req, res) => {
+  res.json(await getChat(currentUser(req), param(req.params.id)));
+});
+
+// POST /api/issues/:id/messages — { body } send a chat message.
+issuesRouter.post("/:id/messages", requireRole("student", "maintenance"), async (req, res) => {
+  await sendMessage(currentUser(req), param(req.params.id), requireString(req.body ?? {}, "body", "Message"));
+  res.status(201).json(await getChat(currentUser(req), param(req.params.id)));
 });

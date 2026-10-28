@@ -27,6 +27,8 @@ export interface AppState {
   settings: Setting[]
   filters: Filters
   setFilters: (filters: Filters) => void
+  // Reload reports and notifications, e.g. after opening a chat so its unread badge clears.
+  refreshIssues: () => void
   // The actions below save to the server; each resolves to true when it worked.
   addIssue: (issue: NewIssue) => Promise<boolean>
   receiveIssue: (issue: Issue) => Promise<boolean>

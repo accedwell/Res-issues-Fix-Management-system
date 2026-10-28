@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { ChatButton } from './Chat'
 import { Icon } from './Icon'
 import { useApp } from '../context/appContext'
 import { STATUS_CLASS } from '../data/constants'
@@ -70,7 +71,7 @@ export function EmptyState({ icon, title, sub }: { icon: string; title: string; 
 }
 
 export function IssueRow({ issue, extra }: { issue: Issue; extra?: ReactNode }) {
-  const { catInfo, setModal } = useApp()
+  const { catInfo, setModal, auth } = useApp()
   const category = catInfo(issue.category)
   const overdue = isOverdue(issue)
   const notResolved = notResolvedReason(issue)
@@ -96,7 +97,12 @@ export function IssueRow({ issue, extra }: { issue: Issue; extra?: ReactNode }) 
           </div>
         )}
       </div>
-      <span className={'status-pill ' + STATUS_CLASS[issue.status]}>{issue.status}</span>
+      {/* One grid cell for the chat icon and the status, so the row keeps its four columns. Admins open
+          chats from the report details instead, to keep their long lists tidy. */}
+      <span className="issue-status">
+        {auth.role !== 'admin' && <ChatButton issue={issue} />}
+        <span className={'status-pill ' + STATUS_CLASS[issue.status]}>{issue.status}</span>
+      </span>
       {extra ?? (
         <span className="icon-inline" style={{ color: 'var(--ink-soft)' }}>
           <Icon name="arrow-right" />
