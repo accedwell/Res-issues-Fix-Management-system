@@ -37,6 +37,7 @@ function toIssue(row: IssueRow): Issue {
     studentName: row.reporter.fullName,
     assignedTo: row.assigneeId,
     dateReported: toDay(row.reportedAt),
+    reportedAt: row.reportedAt.toISOString(),
     photo: !!row.photo,
     history: row.history.map((h) => ({
       status: (h.newValue as Status) ?? "Submitted",
@@ -54,7 +55,7 @@ const historyRow = (entry: HistoryEntry, offsetMs = 0) => ({
   action: historyAction(entry.status, entry.note),
   newValue: entry.status,
   comment: entry.note,
-  createdAt: fromDay(entry.date, offsetMs),
+  createdAt: entry.at ? new Date(entry.at) : fromDay(entry.date, offsetMs),
 });
 
 // Newest first.
@@ -104,7 +105,7 @@ export async function insertIssue(issue: Issue): Promise<Issue> {
       roomNumber: issue.room,
       hasPhoto: issue.photo,
       reopenCount: issue.reopened,
-      reportedAt: fromDay(issue.dateReported),
+      reportedAt: issue.reportedAt ? new Date(issue.reportedAt) : fromDay(issue.dateReported),
       history: { create: issue.history.map((h, i) => ({ ...historyRow(h, i), userId: issue.studentId })) },
     },
     include: withDetails,

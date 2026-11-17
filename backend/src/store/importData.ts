@@ -1,10 +1,13 @@
 import prisma from "../lib/prisma.js";
+import { requireRoleEmail } from "../lib/http.js";
 import { fromDay, historyAction, notificationKind, priorityToDb, roleToDb, statusToDb } from "./mappers.js";
 import type { Data } from "../types.js";
 
 // Replaces everything in the database with the given data (used by `npm run reset-data` and
 // `npm run import-json`). Each list is inserted in its original order.
 export async function loadData(data: Data): Promise<void> {
+  // Validate before replacing any records, including when importing a JSON backup.
+  const users = data.users.map((user) => ({ ...user, email: requireRoleEmail({ email: user.email }, user.role) }));
   const base = Date.now() - 60 * 60 * 1000;
   const inOrder = (i: number) => new Date(base + i * 1000);
 
@@ -28,7 +31,7 @@ export async function loadData(data: Data): Promise<void> {
       });
 
       await tx.user.createMany({
-        data: data.users.map((u) => ({
+        data: users.map((u) => ({
           id: u.id,
           fullName: u.name,
           email: u.email.toLowerCase(),

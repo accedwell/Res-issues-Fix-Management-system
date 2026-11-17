@@ -1,6 +1,13 @@
 import type { MouseEvent } from 'react'
 import { CATEGORY_SPECIALIZATION, DONE_STATUSES, GENERAL_SPECIALIZATION, OVERDUE_AFTER_DAYS } from './data/constants'
-import type { AppNotification, Auth, Issue, Staff } from './types'
+import type { AppNotification, Auth, Issue, Role, Staff } from './types'
+
+export const emailDomainForRole = (role: Role) => role === 'student' ? 'resStudent.ac.za' : 'resStaff.ac.za'
+
+export function isEmailForRole(email: string, role: Role): boolean {
+  const normalized = email.trim().toLowerCase()
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) && normalized.endsWith(`@${emailDomainForRole(role).toLowerCase()}`)
+}
 
 export const formatDate = (date: string) =>
   new Date(date).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
@@ -15,12 +22,20 @@ export const isOpen = (issue: Issue) => !DONE_STATUSES.includes(issue.status)
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// Whole days since the issue was reported (dates are YYYY-MM-DD, counted in UTC like the server).
+// Total age of the original report, for workload summaries.
 export const daysOpen = (issue: Issue) =>
-  Math.max(0, Math.floor((Date.parse(new Date().toISOString().slice(0, 10)) - Date.parse(issue.dateReported)) / DAY_MS))
+  Math.max(0, Math.floor((Date.now() - Date.parse(issue.reportedAt ?? issue.history[0]?.at ?? issue.dateReported)) / DAY_MS))
 
-// Still open after the time allowed for its priority.
-export const isOverdue = (issue: Issue) => isOpen(issue) && daysOpen(issue) > OVERDUE_AFTER_DAYS[issue.priority]
+export function followUpStartedAt(issue: Issue): string {
+  const followUp = [...issue.history].reverse().find((entry) => entry.note.startsWith(NOT_FIXED_NOTE))
+  return followUp?.at ?? followUp?.date ?? issue.reportedAt ?? issue.history[0]?.at ?? issue.dateReported
+}
+
+// Use exact timestamps, including a fresh 24-hour period after the student sends it again.
+export const isOverdue = (issue: Issue) => {
+  const started = Date.parse(followUpStartedAt(issue))
+  return isOpen(issue) && Number.isFinite(started) && Date.now() - started >= OVERDUE_AFTER_DAYS[issue.priority] * DAY_MS
+}
 
 // Whether a notification is meant for the logged-in user.
 export const isForUser = (n: AppNotification, auth: Auth) =>

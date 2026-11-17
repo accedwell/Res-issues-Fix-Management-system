@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { EmptyState, IssueRow, StatRow } from '../components/common'
+import { EmptyState, IssueRow } from '../components/common'
 import { useApp } from '../context/appContext'
-import { daysTaken } from '../exportCsv'
 import { issuesInPeriod, monthPeriod } from '../periodReport'
-import { formatDate, isOpen, isOverdue, stop } from '../utils'
+import { formatDate, isOpen, stop } from '../utils'
 import type { Issue } from '../types'
 
 export function MaintenanceDashboard({ tab }: { tab: string }) {
@@ -37,14 +36,12 @@ export function MaintenanceDashboard({ tab }: { tab: string }) {
         <EmptyState
           icon="tools"
           title={completed ? 'Nothing completed yet' : 'No tasks assigned'}
-          sub="New assignments from residence administrators will appear here."
+          sub="New assignments from supervisors will appear here."
         />
       )}
     </div>
   )
 }
-
-const average = (values: number[]) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null)
 
 // A staff member's own report: how many jobs, how fast, and what students said. Students stay
 // anonymous — the server never sends their names to maintenance staff.
@@ -55,10 +52,6 @@ function MyWorkReport({ issues }: { issues: Issue[] }) {
   const months = [...new Set(issues.map((i) => i.dateReported.slice(0, 7)))].sort().reverse()
   const jobs = month === 'all' ? issues : issuesInPeriod(issues, monthPeriod(month))
 
-  const done = jobs.filter((i) => !isOpen(i))
-  const avgDays = average(done.map(daysTaken))
-  const rated = jobs.flatMap((i) => (i.feedback?.rating != null ? [i.feedback.rating] : []))
-  const avgRating = average(rated)
   const feedback = jobs.filter((i) => i.feedback).sort((a, b) => b.dateReported.localeCompare(a.dateReported))
 
   return (
@@ -77,15 +70,6 @@ function MyWorkReport({ issues }: { issues: Issue[] }) {
             </select>
           </div>
         </div>
-        <StatRow
-          items={[
-            { icon: 'tools', value: jobs.length, label: 'Jobs assigned', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)' },
-            { icon: 'check-circle', value: done.length, label: 'Finished', bg: 'var(--good-bg)', fg: 'var(--good)' },
-            { icon: 'clock', value: jobs.filter(isOverdue).length, label: 'Overdue now', bg: 'var(--bad-bg)', fg: 'var(--bad)' },
-            { icon: 'refresh', value: avgDays === null ? '—' : `${avgDays.toFixed(1)} d`, label: 'Average days to fix', bg: 'var(--slate-bg)', fg: 'var(--mint-soft)' },
-            { icon: 'star', value: avgRating === null ? '—' : `${avgRating.toFixed(1)}★`, label: `Average rating (${rated.length})`, bg: 'var(--warn-bg)', fg: 'var(--warn)' },
-          ]}
-        />
       </div>
 
       <div className="card">

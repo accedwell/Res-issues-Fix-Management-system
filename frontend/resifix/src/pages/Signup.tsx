@@ -4,6 +4,7 @@ import { apiSignup } from '../api'
 import { PasswordInput } from '../components/PasswordInput'
 import { useApp } from '../context/appContext'
 import { BLOCKS } from '../data/constants'
+import { isEmailForRole } from '../utils'
 
 export function Signup() {
   const { setRoute, login } = useApp()
@@ -19,6 +20,10 @@ export function Signup() {
   // Only students register themselves; staff accounts are created by the system administrator.
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (!isEmailForRole(form.email, 'student')) {
+      setError('Student accounts must use an @resStudent.ac.za email address.')
+      return
+    }
     if (form.password.length < 8) {
       setError('Password must be at least 8 characters.')
       return
@@ -75,7 +80,8 @@ export function Signup() {
           </div>
           <div className="field">
             <label>Email address</label>
-            <input type="email" value={form.email} onChange={field('email')} placeholder="you@campus.ac.za" required />
+            <input type="email" value={form.email} onChange={field('email')} placeholder="name@resStudent.ac.za" required />
+            <div className="field-hint">Use your @resStudent.ac.za student email.</div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div className="field">

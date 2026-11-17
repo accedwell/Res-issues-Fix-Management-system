@@ -10,9 +10,9 @@ export const PRIORITIES: Priority[] = ["Low", "Normal", "High", "Urgent"];
 export const DONE_STATUSES: Status[] = ["Resolved", "Closed"];
 // Places in a block that belong to nobody. Besides their own room, students can only report these,
 // so nobody can report a problem in another student's room. Keep in step with the app's list.
-export const SHARED_PLACES = ["Hallway", "Bathroom", "Kitchen", "Common room", "Laundry room", "Stairs / entrance", "Outside the block"];
-// Every report, whatever its priority, is overdue once it is still open after 2 days.
-export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 2, High: 2, Normal: 2, Low: 2 };
+export const SHARED_PLACES = ["Hallway", "Laundry room", "Study area", "Elevator (Lift)", "Stairs / entrance", "Outside the block"];
+// Students can follow up on an unresolved report after 24 elapsed hours.
+export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 1, High: 1, Normal: 1, Low: 1 };
 
 export interface User {
   id: string;
@@ -66,6 +66,7 @@ export interface Issue {
   studentName: string;
   assignedTo: string | null;
   dateReported: string;
+  reportedAt?: string;
   photo: boolean;
   history: HistoryEntry[];
   feedback: Feedback | null;

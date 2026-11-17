@@ -6,9 +6,9 @@ import { ChatModal } from './Chat'
 import { useApp } from '../context/appContext'
 import { PasswordInput } from './PasswordInput'
 import {
-  BLOCKS, CATEGORY_ICONS, GENERAL_SPECIALIZATION, PRIORITIES, PRIORITY_CLASS, ROLE_NAMES, SHARED_PLACES, SPECIALIZATIONS, STATUS_CLASS,
+  BLOCKS, CATEGORY_ICONS, GENERAL_SPECIALIZATION, PRIORITIES, PRIORITY_CLASS, ROLE_NAMES, SHARED_PLACES, SPECIALIZATIONS, STATUS_CLASS, isReportableCategory,
 } from '../data/constants'
-import { canEditReport, canReportNotFixed, formatDate, isOpen, notResolvedReason, recommendStaff } from '../utils'
+import { canEditReport, canReportNotFixed, emailDomainForRole, formatDate, isEmailForRole, isOpen, isOverdue, notResolvedReason, recommendStaff } from '../utils'
 import type { Category, Issue, Priority, Role, Status } from '../types'
 
 export function ModalHost() {
@@ -20,6 +20,9 @@ export function ModalHost() {
 
   let content = null
   switch (modal.type) {
+    case 'overdue':
+      content = <OverdueReportsModal close={close} />
+      break
     case 'addUser':
       content = <AddUserModal close={close} />
       break
@@ -202,7 +205,7 @@ function DetailModal({ issue, close }: IssueModalProps) {
         )}
         {studentCanReopen && (
           <button className="btn btn-ghost" onClick={() => setModal({ type: 'notfixed', issueId: issue.id })}>
-            <Icon name="refresh" /> Still not fixed
+            <Icon name="refresh" /> {isOpen(issue) ? 'Send again' : 'Still not fixed'}
           </button>
         )}
         <button className="btn btn-ghost" onClick={close}>
@@ -432,7 +435,7 @@ function EditReportModal({ issue, close }: IssueModalProps) {
     <div className="modal">
       <h3>Edit report</h3>
       <p className="modal-sub">
-        {issue.ref} — you can change it until the residence admin receives it.
+        {issue.ref} — you can change it until the supervisor receives it.
       </p>
       <div className="field">
         <label>Short title</label>
@@ -442,8 +445,8 @@ function EditReportModal({ issue, close }: IssueModalProps) {
         <div className="field">
           <label>Category</label>
           <select value={form.category} onChange={field('category')}>
-            {categories.map((c) => (
-              <option key={c.key} value={c.key}>
+            {categories.filter((c) => isReportableCategory(c) || c.key === issue.category).map((c) => (
+              <option key={c.key} value={c.key} disabled={!isReportableCategory(c)}>
                 {c.name}
               </option>
             ))}
@@ -502,7 +505,7 @@ function CancelReportModal({ issue, close }: IssueModalProps) {
         {issue.ref} — {issue.title}
       </p>
       <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.55 }}>
-        The report will be removed and the residence admin will be told it was cancelled. This can't be undone — if the
+        The report will be removed and the supervisor will be told it was cancelled. This can't be undone — if the
         problem comes back, report it again.
       </p>
       <div className="modal-actions">
@@ -524,19 +527,43 @@ function CancelReportModal({ issue, close }: IssueModalProps) {
   )
 }
 
+function OverdueReportsModal({ close }: { close: () => void }) {
+  const { issues, auth, setModal } = useApp()
+  const overdue = issues.filter((issue) => issue.studentId === auth.studentId && isOverdue(issue))
+  return (
+    <section className="modal" role="dialog" aria-modal="true" aria-labelledby="overdue-title">
+      <h3 id="overdue-title">Your issue is not yet fixed</h3>
+      <p className="modal-sub">These reports are still unresolved after 24 hours. Open a report or send it again to remind the residence team.</p>
+      {overdue.length ? overdue.map((issue) => (
+        <div className="card" key={issue.id}>
+          <b>{issue.ref} — {issue.title}</b>
+          <p className="card-sub">{issue.residence} · {issue.room} · {issue.status}</p>
+          <div className="modal-actions">
+            <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'detail', issueId: issue.id })}>Open report</button>
+            <button className="btn btn-primary btn-sm" onClick={() => setModal({ type: 'notfixed', issueId: issue.id })}>Send again</button>
+          </div>
+        </div>
+      )) : <p>All your reports have been updated. Check My reports for the latest progress.</p>}
+      <div className="modal-actions"><button className="btn btn-ghost" onClick={close}>Remind me next login</button></div>
+    </section>
+  )
+}
+
 function NotFixedModal({ issue, close }: IssueModalProps) {
   const { reportNotFixed } = useApp()
-  const [reason, setReason] = useState('')
+  const resend = isOpen(issue)
+  const [reason, setReason] = useState(isOverdue(issue) ? 'This issue is still not fixed after 24 hours.' : '')
   const [showError, setShowError] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   return (
-    <div className="modal">
-      <h3>Report: issue not fixed</h3>
+    <div className="modal" role="dialog" aria-modal="true" aria-label={resend ? 'Send report again' : 'Re-open issue'}>
+      <h3>{resend ? 'Send report again' : 'Report: issue not fixed'}</h3>
       <p className="modal-sub">
         {issue.ref} — {issue.title}
       </p>
       <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
-        Tell us what is still wrong. The report will be re-opened and sent back to maintenance.
+        Tell us what is still wrong. The residence team will be notified, and the report will keep its reference number and history.
       </p>
       <div className="field">
         <label>What is still not fixed? *</label>
@@ -548,20 +575,22 @@ function NotFixedModal({ issue, close }: IssueModalProps) {
       </div>
       {showError && <div className="field-error">Please describe what is still wrong.</div>}
       <div className="modal-actions">
-        <button className="btn btn-ghost" onClick={close}>
+        <button className="btn btn-ghost" onClick={close} disabled={busy}>
           Cancel
         </button>
         <button
           className="btn btn-primary"
-          onClick={() => {
+          disabled={busy}
+          onClick={async () => {
             if (!reason.trim()) {
               setShowError(true)
               return
             }
-            reportNotFixed(issue, reason.trim())
+            setBusy(true)
+            if (!(await reportNotFixed(issue, reason.trim()))) setBusy(false)
           }}
         >
-          Re-open issue
+          {busy ? 'Sending…' : resend ? 'Send again' : 'Re-open issue'}
         </button>
       </div>
     </div>
@@ -585,6 +614,7 @@ function AddUserModal({ close }: { close: () => void }) {
   const submit = async () => {
     const isStudent = form.role === 'student'
     if (!form.name.trim() || !form.email.trim()) return setError('Please fill in name and email.')
+    if (!isEmailForRole(form.email, form.role)) return setError(`${isStudent ? 'Student' : 'Staff'} accounts must use an @${emailDomainForRole(form.role)} email address.`)
     if (form.password.length < 8) return setError('The password must be at least 8 characters.')
     if (isStudent && (!form.studentNumber.trim() || !form.room.trim())) return setError('Please fill in the student number and room.')
     setError('')
@@ -620,7 +650,8 @@ function AddUserModal({ close }: { close: () => void }) {
       </div>
       <div className="field">
         <label>Email address</label>
-        <input type="email" value={form.email} onChange={field('email')} placeholder="name@campus.ac.za" autoComplete="off" />
+        <input type="email" value={form.email} onChange={field('email')} placeholder={form.role === 'student' ? 'name@resStudent.ac.za' : 'name@resStaff.ac.za'} autoComplete="off" />
+        <div className="field-hint">{form.role === 'student' ? 'Student' : 'Staff'} accounts use @{emailDomainForRole(form.role)}.</div>
       </div>
       <div className="field">
         <label>Starting password</label>

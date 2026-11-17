@@ -40,10 +40,11 @@ export function Login() {
               type="email"
               value={form.email}
               onChange={field('email')}
-              placeholder="you@campus.ac.za"
+              placeholder="e.g. naledi@resStudent.ac.za"
               autoComplete="email"
               required
             />
+            <div className="field-hint">Students: @resStudent.ac.za · Staff: @resStaff.ac.za</div>
           </div>
           <div className="field">
             <div className="field-label-row">

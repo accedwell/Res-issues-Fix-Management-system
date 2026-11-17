@@ -68,6 +68,7 @@ export interface Issue {
   // Sent by the server so students can see who is working on their report.
   assignedToName?: string | null
   dateReported: string
+  reportedAt?: string
   photo: boolean
   history: HistoryEntry[]
   feedback: Feedback | null
@@ -154,6 +155,7 @@ export interface NavItem {
 }
 
 export type Modal =
+  | { type: 'overdue' }
   | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed' | 'editReport' | 'cancelReport' | 'chat'; issueId: string }
   | { type: 'addUser' }
   | { type: 'removeUser'; userId: string }

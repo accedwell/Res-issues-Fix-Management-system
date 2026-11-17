@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler } from "express";
+import type { Role } from "../types.js";
 
 // Throw this from any route to send a clean JSON error response.
 export class HttpError extends Error {
@@ -56,6 +57,15 @@ export function requireOneOf<T extends string>(body: Body, field: string, allowe
 export function requireEmail(body: Body, field = "email"): string {
   const email = requireString(body, field, "Email").toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest("Email address is not valid");
+  return email;
+}
+
+export function requireRoleEmail(body: Body, role: Role): string {
+  const email = requireEmail(body);
+  const domain = role === "student" ? "resStudent.ac.za" : "resStaff.ac.za";
+  if (!email.endsWith(`@${domain.toLowerCase()}`)) {
+    throw badRequest(`${role === "student" ? "Student" : "Staff"} accounts must use an @${domain} email address`);
+  }
   return email;
 }
 

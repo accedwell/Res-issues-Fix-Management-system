@@ -9,6 +9,10 @@
     "start": "node dist/index.js",
     "reset-data": "tsx src/scripts/reset-data.ts",
     "typecheck": "tsc --noEmit",
+    "test:follow-up": "tsx --test tests/issueTiming.test.ts tests/issueFollowUp.integration.test.ts",
+    "test:email-domains": "tsx --test tests/emailDomains.test.ts",
+    "test:session": "tsx --test tests/authSession.test.ts",
+    "migrate:email-domains": "tsx src/scripts/update-email-domains.ts",
     "seed": "prisma db seed",
     "import-json": "tsx src/scripts/import-json.ts"
   },

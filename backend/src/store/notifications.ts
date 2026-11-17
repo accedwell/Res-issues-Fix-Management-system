@@ -1,4 +1,5 @@
 import prisma from "../lib/prisma.js";
+import { createHash } from "node:crypto";
 import { newId } from "./db.js";
 import { notificationKind, toDay } from "./mappers.js";
 import type { Notification } from "../types.js";
@@ -23,6 +24,16 @@ export async function addNotification(userId: string, message: string, issueId?:
     data: { id: newId("n"), userId, message, issueId: issueId ?? null, ...notificationKind(message) },
   });
   return toNotification(row);
+}
+
+// A stable primary key prevents duplicate reminders from concurrent logins or server workers.
+export async function addFollowUpNotification(userId: string, issueId: string, startedAt: string, message: string): Promise<boolean> {
+  const key = createHash("sha256").update(JSON.stringify([userId, issueId, startedAt])).digest("hex");
+  const { count } = await prisma.notification.createMany({
+    data: [{ id: `followup-${key}`, userId, issueId, message, ...notificationKind(message) }],
+    skipDuplicates: true,
+  });
+  return count > 0;
 }
 
 export async function markRead(userId: string, id: string): Promise<boolean> {

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { currentUser, requireAuth, requireRole } from "../middleware/auth.js";
-import { badRequest, HttpError, notFound, optionalString, requireEmail, requireOneOf, requirePassword, requireString } from "../lib/http.js";
+import { badRequest, HttpError, notFound, optionalString, requireRoleEmail, requireOneOf, requirePassword, requireString } from "../lib/http.js";
 import { hashPassword } from "../lib/security.js";
 import { removeUser } from "../services/admin.js";
 import { GENERAL_SPECIALIZATION, staffWorkload } from "../services/assignment.js";
@@ -31,7 +31,7 @@ usersRouter.get("/", async (_req, res) => {
 usersRouter.post("/", async (req, res) => {
   const body = req.body ?? {};
   const role = requireOneOf(body, "role", ROLES);
-  const email = requireEmail(body);
+  const email = requireRoleEmail(body, role);
   if (await getUserByEmail(email)) throw new HttpError(409, "An account with this email already exists");
 
   const user: User = {

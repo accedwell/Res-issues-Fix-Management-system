@@ -1,4 +1,5 @@
 import prisma from "../lib/prisma.js";
+import { requireRoleEmail } from "../lib/http.js";
 import { roleFromDb, roleToDb } from "./mappers.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import type { PublicUser, Role, User } from "../types.js";
@@ -57,7 +58,7 @@ export async function insertUser(user: User): Promise<User> {
     data: {
       id: user.id,
       fullName: user.name,
-      email: user.email.toLowerCase(),
+      email: requireRoleEmail({ email: user.email }, user.role),
       passwordHash: user.passwordHash,
       role: roleToDb(user.role),
       studentNumber: user.studentNumber ?? null,

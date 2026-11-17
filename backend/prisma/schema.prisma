@@ -126,6 +126,9 @@ model MaintenanceIssue {
   hasPhoto    Boolean @default(false) @map("has_photo")
   // How many times the student said it was not fixed.
   reopenCount Int     @default(0) @map("reopen_count")
+  // Validated software report plus trusted session metadata; existing residence reports stay unchanged.
+  systemReport Json?  @map("system_report")
+  chatbotSubmissionId String? @unique @map("chatbot_submission_id")
 
   reportedAt DateTime  @default(now()) @map("reported_at")
   assignedAt DateTime? @map("assigned_at")

@@ -8,7 +8,7 @@ import {
 } from '../api'
 import { CATEGORIES, DEFAULT_FILTERS, DEFAULT_TABS, ROLE_NAMES } from '../data/constants'
 import { emitCallSignal } from '../callBus'
-import { isForUser } from '../utils'
+import { isForUser, isOverdue } from '../utils'
 import type { AppNotification, Auth, Category, Filters, Issue, Modal, Role, Route, Setting, Staff, User } from '../types'
 
 const LOGGED_OUT: Auth = { loggedIn: false, role: null, name: null, userId: null, studentId: null }
@@ -86,9 +86,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (topics: Topic[]) => {
       const role = roleRef.current
       if (!role) return
+      let loadedIssues: Issue[] | undefined
       const wanted = topics.filter((t) => TOPICS_FOR_ROLE[role].includes(t))
       const loaders: Record<Topic, () => Promise<void>> = {
-        issues: async () => setIssues(await fetchIssues()),
+        issues: async () => {
+          loadedIssues = await fetchIssues()
+          if (roleRef.current === role) setIssues(loadedIssues)
+        },
         notifications: async () => setNotifications(await fetchNotifications()),
         categories: async () => setCategories(await fetchCategories()),
         staff: async () => setStaff(await fetchStaff()),
@@ -97,7 +101,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       const results = await Promise.allSettled(wanted.map((t) => loaders[t]()))
       const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
-      if (!failed) return
+      if (!failed) return loadedIssues
       // An expired or removed account can't load anything, so send the user back to log in.
       if (/log in/i.test(errorMessage(failed.reason))) {
         endSession()
@@ -115,9 +119,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAuth({ loggedIn: true, role, name, userId, studentId: role === 'student' ? userId : null, block: home.block, room: home.room })
       setTabs({ ...DEFAULT_TABS })
       setFilters(DEFAULT_FILTERS)
+      setModal(null)
       setReady(false)
-      await refresh(TOPICS_FOR_ROLE[role])
+      const loadedIssues = await refresh(TOPICS_FOR_ROLE[role])
+      if (roleRef.current !== role) return
       setReady(true)
+      if (role === 'student' && loadedIssues?.some((issue) => issue.studentId === userId && isOverdue(issue))) {
+        setModal({ type: 'overdue' })
+      }
       if (!welcome) return
       try {
         const unread = (await fetchNotifications()).filter((n) => !n.read).length
@@ -223,7 +232,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         status === 'Resolved'
           ? 'Marked as resolved — the student will be asked to confirm.'
           : status === 'Not Resolved'
-            ? 'Marked as not resolved — the admin and student have been told why.'
+            ? 'Marked as not resolved — the supervisor and student have been told why.'
             : 'Progress saved.',
       ),
     confirmResolution: (issue, rating, comment) =>
@@ -231,7 +240,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     editReport: (issue, changes) => save(() => apiEditIssue(issue.id, changes), ISSUE_TOPICS, `${issue.ref} was updated.`),
     cancelReport: (issue) => save(() => apiCancelIssue(issue.id), ISSUE_TOPICS, `${issue.ref} was cancelled.`),
     reportNotFixed: (issue, reason) =>
-      save(() => apiReportNotFixed(issue.id, reason), ISSUE_TOPICS, 'Issue re-opened — maintenance has been notified.'),
+      save(() => apiReportNotFixed(issue.id, reason), ISSUE_TOPICS, 'Report sent again — the residence team has been notified.'),
     addUser: (user) => save(() => apiAddUser(user), ['users', 'staff'], `${user.name} has been added.`),
     editUser: (userId, details) => {
       const name = users.find((u) => u.id === userId)?.name ?? 'User'

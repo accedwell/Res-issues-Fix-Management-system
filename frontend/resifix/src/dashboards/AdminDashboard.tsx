@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { EmptyState, IssueRow, StatRow } from '../components/common'
+import { EmptyState, IssueRow } from '../components/common'
 import { ActivityFeed } from '../components/ActivityFeed'
 import { Icon } from '../components/Icon'
 import { TrendChart } from '../components/TrendChart'
@@ -60,8 +60,6 @@ function useShowIssues() {
 function Overview() {
   const { issues } = useApp()
   const showIssues = useShowIssues()
-  const unassigned = issues.filter((i) => matchesView(i, 'unassigned'))
-  const overdue = issues.filter(isOverdue)
   // Unassigned, not resolved or overdue issues, overdue first, then the oldest.
   const needsAttention = issues
     .filter((i) => isOpen(i) && (!i.assignedTo || i.status === 'Not Resolved' || isOverdue(i)))
@@ -69,29 +67,6 @@ function Overview() {
 
   return (
     <div>
-      <StatRow
-        items={[
-          { icon: 'list', value: issues.length, label: 'Total issues', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)', onClick: () => showIssues('all') },
-          { icon: 'refresh', value: issues.filter(isOpen).length, label: 'Currently open', bg: 'var(--warn-bg)', fg: 'var(--warn)', onClick: () => showIssues('open') },
-          { icon: 'user', value: unassigned.length, label: 'Awaiting assignment', bg: '#e6f7f6', fg: 'var(--teal-deep)', onClick: () => showIssues('unassigned') },
-          {
-            icon: 'flag',
-            value: issues.filter((i) => matchesView(i, 'urgent')).length,
-            label: 'Urgent & open',
-            bg: 'var(--bad-bg)',
-            fg: 'var(--bad)',
-            onClick: () => showIssues('urgent'),
-          },
-          {
-            icon: 'clock',
-            value: overdue.length,
-            label: 'Overdue',
-            bg: 'var(--bad-bg)',
-            fg: 'var(--bad)',
-            onClick: () => showIssues('overdue'),
-          },
-        ]}
-      />
       <div className="overview-grid">
         <div className="card">
           <div className="card-head">
@@ -473,7 +448,6 @@ function TeamWorkload() {
                   <span className="team-name">{r.name}</span>
                   <span className="team-spec">
                     {r.specialization}
-                    {r.overdue > 0 && <span className="overdue-tag">{r.overdue} overdue</span>}
                   </span>
                   <span className="team-bar" aria-hidden="true">
                     <span style={{ width: `${(r.open / busiest) * 100}%` }} />
@@ -613,7 +587,7 @@ function PeriodReport({ issues, scope }: { issues: Issue[]; scope: string }) {
   const count = badRange ? 0 : issuesInPeriod(issues, period).length
 
   const open = (print: boolean) => {
-    const html = buildReportHtml(issues, period, catInfo, auth.name ?? 'Residence administrator', scope)
+    const html = buildReportHtml(issues, period, catInfo, auth.name ?? 'Supervisor', scope)
     setBlocked(!openReport(html, print))
   }
 
@@ -672,7 +646,6 @@ const RESULTS_SHOWN = 5
 
 function Reports() {
   const { issues: all, categories, staff, catInfo } = useApp()
-  const showIssues = useShowIssues()
   // Searching narrows every section on this page, the period report and the downloads.
   const [search, setSearch] = useState(NO_SEARCH)
   const [showAllResults, setShowAllResults] = useState(false)
@@ -696,10 +669,6 @@ function Reports() {
     .join(' · ')
   const set = (key: keyof typeof NO_SEARCH) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setSearch({ ...search, [key]: e.target.value })
-  const rated = issues.filter((i) => i.feedback?.rating != null)
-  const average = rated.length
-    ? (rated.reduce((sum, i) => sum + (i.feedback?.rating ?? 0), 0) / rated.length).toFixed(1)
-    : '—'
 
   return (
     <div>
@@ -770,7 +739,7 @@ function Reports() {
           <PeriodReport issues={issues} scope={scope} />
           <div className="card">
             <div className="card-head">
-              <h2>Summary</h2>
+              <h2>Export reports</h2>
               <button
                 className="btn btn-ghost btn-sm"
                 disabled={!issues.length}
@@ -780,21 +749,6 @@ function Reports() {
                 <Icon name="file-text" /> {searching ? `Export ${issues.length === 1 ? 'this issue' : `these ${issues.length} issues`} (CSV)` : 'Export all issues (CSV)'}
               </button>
             </div>
-            <StatRow
-              items={[
-                { icon: 'list', value: issues.length, label: 'Total issues logged', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)', onClick: () => showIssues('all') },
-                {
-                  icon: 'check-circle',
-                  value: issues.filter((i) => i.status === 'Closed').length,
-                  label: 'Closed & confirmed',
-                  bg: 'var(--good-bg)',
-                  fg: 'var(--good)',
-                  onClick: () => showIssues('all', 'Closed'),
-                },
-                { icon: 'star', value: average, label: 'Average feedback rating', bg: 'var(--warn-bg)', fg: 'var(--warn)' },
-                { icon: 'user', value: staff.length, label: 'Maintenance staff', bg: '#e6f7f6', fg: 'var(--teal-deep)' },
-              ]}
-            />
           </div>
           <TrendChart issues={issues} />
           <Hotspots issues={issues} />

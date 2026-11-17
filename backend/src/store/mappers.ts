@@ -41,11 +41,11 @@ export function fromDay(day: string, offsetMs = 0): Date {
 
 // History rows record what kind of change it was, for reports.
 export function historyAction(status: Status, note: string): HistoryAction {
+  if (/not fixed/i.test(note)) return "REOPENED";
   if (status === "Submitted") return "CREATED";
   if (status === "Assigned") return "ASSIGNED";
   if (status === "Resolved") return "RESOLVED";
   if (status === "Closed") return "CLOSED";
-  if (/not fixed/i.test(note)) return "REOPENED";
   return "STATUS_CHANGED";
 }
 
@@ -56,6 +56,7 @@ export function notificationKind(message: string): { type: NotificationType; tit
   if (/^Missed call/i.test(message)) return { type: "COMMENT_ADDED", title: "Missed call" };
   if (/^New job/i.test(message)) return { type: "ISSUE_ASSIGNED", title: "New job" };
   if (/^New .*report/i.test(message)) return { type: "ISSUE_CREATED", title: "New report" };
+  if (/not yet fixed after 24 hours/i.test(message)) return { type: "STATUS_UPDATED", title: "Issue not yet fixed" };
   if (/re-opened/i.test(message)) return { type: "STATUS_UPDATED", title: "Report re-opened" };
   if (/confirmed fixed/i.test(message)) return { type: "ISSUE_CLOSED", title: "Fix confirmed" };
   if (/not resolved|could not be resolved/i.test(message)) return { type: "STATUS_UPDATED", title: "Not resolved" };

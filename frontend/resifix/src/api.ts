@@ -1,9 +1,10 @@
 import type { AppNotification, Category, ChatMessage, Issue, NewIssue, Priority, Role, Setting, SimilarIssue, Staff, Status } from './types'
+import { getToken, saveToken } from './authSession'
+export { getToken, clearToken } from './authSession'
 
 // Backend address. By default it is the same computer the page was opened from, on port 5000,
 // so the app also works from a phone on the same Wi-Fi. Override with VITE_API_URL in a .env file.
 const API_URL = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`
-const TOKEN_KEY = 'resifix-token'
 
 export interface ApiUser {
   id: string
@@ -20,15 +21,6 @@ export interface ApiUser {
 interface AuthResponse {
   token: string
   user: ApiUser
-}
-
-export function getToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY)
-  } catch {
-    // Storage can be blocked (private mode); requests just go without a token.
-    return null
-  }
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -48,22 +40,6 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || 'Something went wrong. Please try again.')
   return data as T
-}
-
-function saveToken(token: string) {
-  try {
-    localStorage.setItem(TOKEN_KEY, token)
-  } catch {
-    // Ignore — the user stays logged in until the page is refreshed.
-  }
-}
-
-export function clearToken() {
-  try {
-    localStorage.removeItem(TOKEN_KEY)
-  } catch {
-    // Nothing to clear.
-  }
 }
 
 export async function apiLogin(email: string, password: string): Promise<ApiUser> {

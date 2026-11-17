@@ -13,14 +13,14 @@ function user(fields: Omit<User, "passwordHash" | "createdAt">): User {
 export function createSeedData(): Data {
   return {
     users: [
-      user({ id: "stu-1", name: "Naledi Mahlangu", email: "naledi.m@campus.ac.za", role: "student", studentNumber: "22045678", block: "Block A", room: "204" }),
-      user({ id: "stu-2", name: "Karabo Sithole", email: "karabo.s@campus.ac.za", role: "student", studentNumber: "22051234", block: "Block C", room: "12" }),
-      user({ id: "adm-1", name: "Palesa Mokgadi", email: "p.mokgadi@campus.ac.za", role: "admin" }),
-      user({ id: "stf-1", name: "Thabo Nkosi", email: "t.nkosi@campus.ac.za", role: "maintenance", specialization: "Plumbing" }),
-      user({ id: "stf-2", name: "Lindiwe Mokoena", email: "l.mokoena@campus.ac.za", role: "maintenance", specialization: "Electrical" }),
-      user({ id: "stf-3", name: "Sipho Dlamini", email: "s.dlamini@campus.ac.za", role: "maintenance", specialization: "General Maintenance" }),
-      user({ id: "stf-4", name: "Ayanda Khumalo", email: "a.khumalo@campus.ac.za", role: "maintenance", specialization: "IT / Wi-Fi" }),
-      user({ id: "sys-1", name: "System Administrator", email: "sysadmin@campus.ac.za", role: "sysadmin" }),
+      user({ id: "stu-1", name: "Naledi Mahlangu", email: "naledi@resStudent.ac.za", role: "student", studentNumber: "22045678", block: "Block A", room: "204" }),
+      user({ id: "stu-2", name: "Karabo Sithole", email: "karabo.s@resStudent.ac.za", role: "student", studentNumber: "22051234", block: "Block C", room: "12" }),
+      user({ id: "adm-1", name: "Palesa Mokgadi", email: "mokgadi@resStaff.ac.za", role: "admin" }),
+      user({ id: "stf-1", name: "Thabo Nkosi", email: "t.nkosi@resStaff.ac.za", role: "maintenance", specialization: "Plumbing" }),
+      user({ id: "stf-2", name: "Lindiwe Mokoena", email: "l.mokoena@resStaff.ac.za", role: "maintenance", specialization: "Electrical" }),
+      user({ id: "stf-3", name: "Sipho Dlamini", email: "s.dlamini@resStaff.ac.za", role: "maintenance", specialization: "General Maintenance" }),
+      user({ id: "stf-4", name: "Ayanda Khumalo", email: "a.khumalo@resStaff.ac.za", role: "maintenance", specialization: "IT / Wi-Fi" }),
+      user({ id: "sys-1", name: "System Administrator", email: "sysadmin@resStaff.ac.za", role: "sysadmin" }),
     ],
 
     issues: [
@@ -31,7 +31,7 @@ export function createSeedData(): Data {
         studentId: "stu-1", studentName: "Naledi Mahlangu", assignedTo: "stf-1", dateReported: "2026-09-20", photo: true,
         history: [
           { status: "Submitted", date: "2026-09-20", note: "Report submitted by student." },
-          { status: "Received", date: "2026-09-20", note: "Reviewed by residence administrator." },
+          { status: "Received", date: "2026-09-20", note: "Reviewed by supervisor." },
           { status: "Assigned", date: "2026-09-21", note: "Assigned to Thabo Nkosi (Plumbing)." },
           { status: "In Progress", date: "2026-09-22", note: "Technician on site, replacement part ordered." },
         ],
@@ -44,7 +44,7 @@ export function createSeedData(): Data {
         studentId: "stu-1", studentName: "Naledi Mahlangu", assignedTo: "stf-4", dateReported: "2026-09-24", photo: false,
         history: [
           { status: "Submitted", date: "2026-09-24", note: "Report submitted by student." },
-          { status: "Received", date: "2026-09-24", note: "Reviewed by residence administrator." },
+          { status: "Received", date: "2026-09-24", note: "Reviewed by supervisor." },
           { status: "Assigned", date: "2026-09-25", note: "Assigned to Ayanda Khumalo (IT / Wi-Fi)." },
         ],
         feedback: null, reopened: 0,
@@ -56,7 +56,7 @@ export function createSeedData(): Data {
         studentId: "stu-1", studentName: "Naledi Mahlangu", assignedTo: "stf-3", dateReported: "2026-09-10", photo: true,
         history: [
           { status: "Submitted", date: "2026-09-10", note: "Report submitted by student." },
-          { status: "Received", date: "2026-09-10", note: "Reviewed by residence administrator." },
+          { status: "Received", date: "2026-09-10", note: "Reviewed by supervisor." },
           { status: "Assigned", date: "2026-09-11", note: "Assigned to Sipho Dlamini." },
           { status: "In Progress", date: "2026-09-12", note: "Chair collected for repair." },
           { status: "Resolved", date: "2026-09-14", note: "Chair repaired and returned to common room." },
@@ -70,7 +70,7 @@ export function createSeedData(): Data {
         studentId: "stu-1", studentName: "Naledi Mahlangu", assignedTo: "stf-2", dateReported: "2026-08-29", photo: false,
         history: [
           { status: "Submitted", date: "2026-08-29", note: "Report submitted by student." },
-          { status: "Received", date: "2026-08-29", note: "Reviewed by residence administrator." },
+          { status: "Received", date: "2026-08-29", note: "Reviewed by supervisor." },
           { status: "Assigned", date: "2026-08-30", note: "Assigned to Lindiwe Mokoena." },
           { status: "In Progress", date: "2026-08-31", note: "Faulty ballast identified." },
           { status: "Resolved", date: "2026-09-01", note: "Light fitting replaced." },
@@ -85,7 +85,7 @@ export function createSeedData(): Data {
         studentId: "stu-2", studentName: "Karabo Sithole", assignedTo: null, dateReported: "2026-09-27", photo: true,
         history: [
           { status: "Submitted", date: "2026-09-27", note: "Report submitted by student." },
-          { status: "Received", date: "2026-09-27", note: "Reviewed by residence administrator — flagged urgent." },
+          { status: "Received", date: "2026-09-27", note: "Reviewed by supervisor — flagged urgent." },
         ],
         feedback: null, reopened: 0,
       },

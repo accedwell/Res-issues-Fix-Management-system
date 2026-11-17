@@ -2,12 +2,15 @@ import { Router } from "express";
 import { currentUser, requireAuth } from "../middleware/auth.js";
 import { notFound } from "../lib/http.js";
 import { listNotifications, markAllRead, markRead } from "../store/notifications.js";
+import { alertOverdueReports } from "../services/issueWorkflow.js";
 
 export const notificationsRouter = Router();
 notificationsRouter.use(requireAuth);
 
 // GET /api/notifications — the logged-in user's notifications, newest first.
 notificationsRouter.get("/", async (req, res) => {
+  // Check on access as well as on the timer, so the reminder is ready at login.
+  if (currentUser(req).role === "student") await alertOverdueReports(currentUser(req).id);
   const notifications = await listNotifications(currentUser(req).id);
   res.json({ notifications, unread: notifications.filter((n) => !n.read).length });
 });

@@ -14,6 +14,10 @@ export const CATEGORIES: Category[] = [
   { key: 'other', name: 'Other', icon: 'dots' },
 ]
 
+// Keep historical category labels available while excluding these from report choices.
+export const isReportableCategory = (category: Category) =>
+  !['security', 'heating', 'cat-security', 'cat-hvac'].includes(category.key)
+
 export const CATEGORY_ICONS = [
   'droplet', 'zap', 'armchair', 'spray', 'wifi', 'shield', 'thermometer',
   'building', 'tap', 'bulb', 'dots', 'flag', 'tools', 'layers',
@@ -23,7 +27,7 @@ export const BLOCKS = ['Block A', 'Block B', 'Block C', 'Block D', 'Block E', 'B
 
 // Places in a block that belong to nobody. Besides their own room, students can only pick these,
 // so nobody reports a problem in another student's room. The server checks the same list.
-export const SHARED_PLACES = ['Hallway', 'Bathroom', 'Kitchen', 'Common room', 'Laundry room', 'Stairs / entrance', 'Outside the block']
+export const SHARED_PLACES = ['Hallway', 'Laundry room', 'Study area', 'Elevator (Lift)', 'Stairs / entrance', 'Outside the block']
 
 export const STATUSES: Status[] = ['Submitted', 'Received', 'Assigned', 'In Progress', 'Not Resolved', 'Resolved', 'Closed']
 
@@ -64,7 +68,7 @@ export const SPECIALIZATIONS = ['Plumbing', 'Electrical', 'IT / Wi-Fi', GENERAL_
 
 export const ROLE_NAMES: Record<Role, string> = {
   student: 'Student',
-  admin: 'Residence Administrator',
+  admin: 'Supervisor',
   maintenance: 'Maintenance Staff',
   sysadmin: 'System Administrator',
 }
@@ -117,7 +121,7 @@ export const ISSUE_VIEWS = [
   { key: 'done', label: 'Resolved / closed' },
 ]
 
-// Every report, whatever its priority, is overdue once it is still open after 2 days (same as the server).
-export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 2, High: 2, Normal: 2, Low: 2 }
+// Follow-up is available after 24 elapsed hours, for every priority (same as the server).
+export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 1, High: 1, Normal: 1, Low: 1 }
 
 export const DEFAULT_FILTERS: Filters = { view: 'all', status: 'all', category: 'all', residence: 'all', assignee: 'all', room: '', search: '' }

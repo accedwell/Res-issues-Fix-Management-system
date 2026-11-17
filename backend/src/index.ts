@@ -83,8 +83,7 @@ app.listen(Number(PORT), "0.0.0.0", () => {
   console.log("Data is stored in PostgreSQL (DATABASE_URL in .env).");
 });
 
-// Once an hour (and at start-up), alert students whose reports have gone overdue. Each report
-// alerts its student only once.
+// Check every minute and at start-up; each reporting/follow-up period alerts only once.
 const checkOverdue = () =>
   alertOverdueReports()
     .then((sent) => {
@@ -95,4 +94,4 @@ const checkOverdue = () =>
     })
     .catch((err) => console.error("Overdue check failed:", err));
 void checkOverdue();
-setInterval(checkOverdue, 60 * 60 * 1000);
+setInterval(checkOverdue, 60 * 1000);
