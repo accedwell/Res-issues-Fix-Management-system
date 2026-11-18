@@ -20,7 +20,7 @@ export const openJobCount = (staffId: string, issues: Issue[]) =>
   issues.filter((i) => i.assignedTo === staffId && isOpen(i)).length
 
 // Picks the staff member whose job matches the issue category, preferring whoever has the fewest open jobs.
-export function recommendStaff(issue: Issue, issues: Issue[]): Staff {
+export function recommendStaff(issue: Pick<Issue, 'category'>, issues: Issue[]): Staff {
   const specialization = CATEGORY_SPECIALIZATION[issue.category] ?? GENERAL_SPECIALIZATION
   const matching = STAFF.filter((s) => s.specialization === specialization)
   const general = STAFF.filter((s) => s.specialization === GENERAL_SPECIALIZATION)

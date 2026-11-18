@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 import type {
-  AppNotification, Auth, Category, Filters, Issue, Modal, NewIssue, Priority, Role, Route, Setting, Status, User,
+  AppNotification, Auth, Category, Filters, Issue, Modal, NewIssue, Priority, Role, Route, Setting, Staff, Status, User,
 } from '../types'
 
 export interface AppState {
@@ -22,6 +22,8 @@ export interface AppState {
   filters: Filters
   setFilters: (filters: Filters) => void
   addIssue: (issue: NewIssue) => void
+  // Used by the AI assistant: creates the report and assigns the best staff member in one step.
+  chatReportIssue: (issue: NewIssue) => { issue: Issue; staff: Staff }
   assignIssue: (issue: Issue, staffId: string, priority: Priority) => void
   updateProgress: (issue: Issue, status: Status, note: string) => void
   confirmResolution: (issue: Issue, rating: number, comment: string) => void

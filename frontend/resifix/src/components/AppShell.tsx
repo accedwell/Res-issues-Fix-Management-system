@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
+import { ChatBot } from './ChatBot'
 import { ModalHost } from './Modals'
 import { useApp } from '../context/appContext'
 import { NAV, PAGE_TITLES, ROLE_NAMES } from '../data/constants'
@@ -104,6 +105,7 @@ export function AppShell() {
         </div>
       </div>
       <ModalHost />
+      {role === 'student' && <ChatBot />}
       {toast && (
         <div key={toast.id} className="toast" role="status">
           {toast.msg}

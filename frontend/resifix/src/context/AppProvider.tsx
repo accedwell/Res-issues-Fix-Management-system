@@ -3,6 +3,7 @@ import { AppContext, type AppState } from './appContext'
 import { clearToken } from '../api'
 import { CATEGORIES, DEFAULT_TABS, STAFF } from '../data/constants'
 import { SEED_ISSUES, SEED_NOTIFICATIONS, SEED_SETTINGS, SEED_USERS } from '../data/seed'
+import { recommendStaff } from '../utils'
 import type { Auth, Filters, Issue, Modal, Role, Route, Status } from '../types'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -102,6 +103,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIssues((prev) => [issue, ...prev])
       setTab('reports')
       showToast('Report submitted — reference ' + ref)
+    },
+    chatReportIssue: (data) => {
+      const staff = recommendStaff({ category: data.category }, issues)
+      const ref = 'ISS-2026-' + String(nextRef.current++).padStart(5, '0')
+      const date = today()
+      const issue: Issue = {
+        id: 'i-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+        ref,
+        ...data,
+        status: 'Assigned',
+        studentName: auth.name ?? '',
+        studentId: auth.studentId ?? '',
+        assignedTo: staff.id,
+        dateReported: date,
+        history: [
+          { status: 'Submitted', date, note: 'Report submitted by student through the ResiFix AI assistant.' },
+          {
+            status: 'Assigned',
+            date,
+            note: `AI assistant assigned ${staff.name} (${staff.specialization}) based on the ${data.category} category and current workload.`,
+          },
+        ],
+        feedback: null,
+        reopened: 0,
+      }
+      setIssues((prev) => [issue, ...prev])
+      notify(issue.studentId, `${ref} was submitted by the AI assistant and assigned to ${staff.name} (${staff.specialization}).`)
+      setTab('reports')
+      showToast(`Report ${ref} assigned to ${staff.name}`)
+      return { issue, staff }
     },
     assignIssue: (issue, staffId, priority) => {
       const staffName = STAFF.find((s) => s.id === staffId)?.name ?? ''

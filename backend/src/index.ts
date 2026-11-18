@@ -6,6 +6,7 @@ import prisma from "./lib/prisma.js";
 import { errorHandler } from "./lib/http.js";
 import { authRouter } from "./routes/auth.js";
 import { categoriesRouter } from "./routes/categories.js";
+import { chatRouter } from "./routes/chat.js";
 import { issuesRouter } from "./routes/issues.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { settingsRouter } from "./routes/settings.js";
@@ -46,6 +47,7 @@ app.get("/api/health/db", async (_req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/chat", chatRouter);
 app.use("/api/issues", issuesRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/users", usersRouter);
