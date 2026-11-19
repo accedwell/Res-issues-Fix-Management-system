@@ -109,14 +109,6 @@ export function Landing() {
                   </li>
                 ))}
               </ol>
-              <div className="ticket-tech">
-                <div className="av">TN</div>
-                <div>
-                  <b>Thabo N.</b>
-                  <span>Plumbing · on the way</span>
-                </div>
-                <Icon name="tools" />
-              </div>
             </div>
           </div>
         </div>
@@ -182,7 +174,7 @@ export function Landing() {
             <span className="mark">RF</span>
             ResiFix
           </span>
-          <span>Student Residence Issue Reporting System · Prototype</span>
+          <span>Student Residence Issue Reporting System</span>
         </div>
       </footer>
     </div>

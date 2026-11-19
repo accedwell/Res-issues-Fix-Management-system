@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
+import { CallManager } from './CallManager'
 import { Icon } from './Icon'
-import { ChatBot } from './ChatBot'
 import { ModalHost } from './Modals'
+import { NotificationBell } from './NotificationBell'
 import { useApp } from '../context/appContext'
 import { NAV, PAGE_TITLES, ROLE_NAMES } from '../data/constants'
 import { AdminDashboard } from '../dashboards/AdminDashboard'
@@ -19,7 +20,7 @@ const DASHBOARDS = {
 }
 
 export function AppShell() {
-  const { auth, tabs, setTab, logout, toast } = useApp()
+  const { auth, tabs, setTab, logout, toast, ready } = useApp()
   const [menuOpen, setMenuOpen] = useState(false)
   const role = auth.role as Role
   const tab = tabs[role]
@@ -89,23 +90,20 @@ export function AppShell() {
               <h1>{PAGE_TITLES[role][tab] || ''}</h1>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {role === 'student' && (
-                <button className="btn btn-primary btn-sm" onClick={() => setTab('report')}>
-                  <Icon name="plus-circle" /> Report Issue
-                </button>
-              )}
+              <NotificationBell />
               <button className="btn btn-ghost btn-sm" onClick={logout}>
                 <Icon name="logout" /> Log out
               </button>
             </div>
           </div>
           <div className="content">
-            <Dashboard tab={tab} />
+            {ready ? <Dashboard tab={tab} /> : <div className="app-loading">Loading your dashboard…</div>}
           </div>
         </div>
       </div>
       <ModalHost />
-      {role === 'student' && <ChatBot />}
+      {/* Voice calls work on any page, so an incoming call can ring wherever the person is. */}
+      {(role === 'student' || role === 'maintenance') && <CallManager />}
       {toast && (
         <div key={toast.id} className="toast" role="status">
           {toast.msg}

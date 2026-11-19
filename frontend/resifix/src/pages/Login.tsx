@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { AuthBrand } from './AuthParts'
 import { apiLogin } from '../api'
+import { PasswordInput } from '../components/PasswordInput'
 import { useApp } from '../context/appContext'
 
 export function Login() {
@@ -19,7 +20,7 @@ export function Login() {
     setBusy(true)
     try {
       const user = await apiLogin(form.email.trim(), form.password)
-      login(user.name, user.role, user.id)
+      login(user.name, user.role, user.id, user)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed.')
       setBusy(false)
@@ -45,9 +46,19 @@ export function Login() {
             />
           </div>
           <div className="field">
-            <label>Password</label>
-            <input
-              type="password"
+            <div className="field-label-row">
+              <label>Password</label>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault()
+                  setRoute('forgot')
+                }}
+              >
+                Forgot password?
+              </a>
+            </div>
+            <PasswordInput
               value={form.password}
               onChange={field('password')}
               placeholder="••••••••"

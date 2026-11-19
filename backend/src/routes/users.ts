@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { currentUser, requireAuth, requireRole } from "../middleware/auth.js";
-import { badRequest, HttpError, optionalString, requireEmail, requireOneOf, requirePassword, requireString } from "../lib/http.js";
+import { badRequest, HttpError, notFound, optionalString, requireEmail, requireOneOf, requirePassword, requireString } from "../lib/http.js";
 import { hashPassword } from "../lib/security.js";
 import { removeUser } from "../services/admin.js";
 import { GENERAL_SPECIALIZATION, staffWorkload } from "../services/assignment.js";
 import { newId } from "../store/db.js";
 import { listBlocks } from "../store/settings.js";
-import { getUserByEmail, getUserByStudentNumber, insertUser, listUsers, toPublic } from "../store/users.js";
+import { getUser, getUserByEmail, getUserByStudentNumber, insertUser, listUsers, toPublic, updateUserDetails } from "../store/users.js";
 import { ROLES, type User } from "../types.js";
 
 export const usersRouter = Router();
@@ -56,6 +56,26 @@ usersRouter.post("/", async (req, res) => {
 
   await insertUser(user);
   res.status(201).json({ user: toPublic(user) });
+});
+
+// PATCH /api/users/:id — fix a mistake in an account. Students: { block, room }. Maintenance: { specialization }.
+// Name, email, student number, role and password cannot be changed here.
+usersRouter.patch("/:id", async (req, res) => {
+  const body = req.body ?? {};
+  const user = await getUser(String(req.params.id));
+  if (!user) throw notFound("User not found");
+
+  if (user.role === "student") {
+    const block = requireString(body, "block", "Block");
+    if (!(await listBlocks()).includes(block)) throw badRequest("Unknown block");
+    const updated = await updateUserDetails(user.id, { block, room: requireString(body, "room", "Room number") });
+    return res.json({ user: toPublic(updated) });
+  }
+  if (user.role === "maintenance") {
+    const updated = await updateUserDetails(user.id, { specialization: requireString(body, "specialization", "Job type") });
+    return res.json({ user: toPublic(updated) });
+  }
+  throw badRequest("Only students and maintenance staff have details that can be edited");
 });
 
 // DELETE /api/users/:id

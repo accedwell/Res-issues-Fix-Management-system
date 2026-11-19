@@ -1,13 +1,18 @@
 export type Role = "student" | "admin" | "maintenance" | "sysadmin";
 
-export type Status = "Submitted" | "Received" | "Assigned" | "In Progress" | "Resolved" | "Closed";
+export type Status = "Submitted" | "Received" | "Assigned" | "In Progress" | "Not Resolved" | "Resolved" | "Closed";
 
 export type Priority = "Low" | "Normal" | "High" | "Urgent";
 
 export const ROLES: Role[] = ["student", "admin", "maintenance", "sysadmin"];
-export const STATUSES: Status[] = ["Submitted", "Received", "Assigned", "In Progress", "Resolved", "Closed"];
+export const STATUSES: Status[] = ["Submitted", "Received", "Assigned", "In Progress", "Not Resolved", "Resolved", "Closed"];
 export const PRIORITIES: Priority[] = ["Low", "Normal", "High", "Urgent"];
 export const DONE_STATUSES: Status[] = ["Resolved", "Closed"];
+// Places in a block that belong to nobody. Besides their own room, students can only report these,
+// so nobody can report a problem in another student's room. Keep in step with the app's list.
+export const SHARED_PLACES = ["Hallway", "Bathroom", "Kitchen", "Common room", "Laundry room", "Stairs / entrance", "Outside the block"];
+// Every report, whatever its priority, is overdue once it is still open after 2 days.
+export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 2, High: 2, Normal: 2, Low: 2 };
 
 export interface User {
   id: string;
@@ -37,10 +42,13 @@ export interface HistoryEntry {
   status: Status;
   date: string;
   note: string;
+  // Exact time it happened (ISO). Sent to the app; not needed when adding a new entry.
+  at?: string;
 }
 
 export interface Feedback {
-  rating: number;
+  // 1-5, or null when the student confirmed without rating.
+  rating: number | null;
   comment: string;
 }
 
@@ -70,12 +78,22 @@ export interface Notification {
   message: string;
   date: string;
   read: boolean;
+  // The issue it is about, so the app can open it from the bell.
+  issueId?: string;
 }
 
 export interface Setting {
   key: string;
   label: string;
   on: boolean;
+}
+
+// A pending "forgot password" request. Only a hash of the code is stored.
+export interface PasswordReset {
+  userId: string;
+  codeHash: string;
+  expiresAt: number;
+  attempts: number;
 }
 
 export interface Data {
@@ -87,4 +105,6 @@ export interface Data {
   blocks: string[];
   // Running number used for issue references (ISS-<year>-<number>).
   nextIssueNumber: number;
+  // Optional so data files created before this feature still load.
+  passwordResets?: PasswordReset[];
 }

@@ -14,7 +14,6 @@ function Users() {
   return (
     <div className="card">
       <div className="card-head">
-        <h2>Users</h2>
         <button className="btn btn-primary btn-sm" onClick={() => setModal({ type: 'addUser' })}>
           <Icon name="plus-circle" /> Add user
         </button>
@@ -35,9 +34,17 @@ function Users() {
               <td>{user.email}</td>
               <td>{user.extra}</td>
               <td>
-                <button className="btn btn-danger-ghost btn-sm" onClick={() => setModal({ type: 'removeUser', userId: user.id })}>
-                  <Icon name="x" /> Remove
-                </button>
+                <span style={{ display: 'inline-flex', gap: 6 }}>
+                  {/* Only students (block, room) and maintenance staff (job type) have details to correct. */}
+                  {(user.kind === 'student' || user.kind === 'maintenance') && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'editUser', userId: user.id })}>
+                      Edit
+                    </button>
+                  )}
+                  <button className="btn btn-danger-ghost btn-sm" onClick={() => setModal({ type: 'removeUser', userId: user.id })}>
+                    <Icon name="x" /> Remove
+                  </button>
+                </span>
               </td>
             </tr>
           ))}
@@ -53,7 +60,6 @@ function Categories() {
   return (
     <div className="card">
       <div className="card-head">
-        <h2>Issue categories</h2>
         <button className="btn btn-primary btn-sm" onClick={() => setModal({ type: 'addCategory' })}>
           <Icon name="plus-circle" /> Add category
         </button>
@@ -94,7 +100,6 @@ function Settings() {
 
   return (
     <div className="card">
-      <h2>System settings</h2>
       <ul className="list-plain">
         {settings.map((s) => (
           <li key={s.key}>

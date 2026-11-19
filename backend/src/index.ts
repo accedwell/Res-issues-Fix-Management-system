@@ -1,17 +1,21 @@
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import "dotenv/config";
 import prisma from "./lib/prisma.js";
-import { errorHandler } from "./lib/http.js";
+import { broadcast, broadcastChanges, eventsHandler, ticketHandler } from "./lib/events.js";
+import { errorHandler, isDevMode } from "./lib/http.js";
+import { requireAuth } from "./middleware/auth.js";
 import { authRouter } from "./routes/auth.js";
+import { callsRouter } from "./routes/calls.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { chatRouter } from "./routes/chat.js";
 import { issuesRouter } from "./routes/issues.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { settingsRouter } from "./routes/settings.js";
 import { usersRouter } from "./routes/users.js";
-import { DATA_FILE, db } from "./store/db.js";
+import { alertOverdueReports } from "./services/issueWorkflow.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,8 +25,22 @@ const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173,http://
   .split(",")
   .map((origin) => origin.trim());
 
-app.use(cors({ origin: allowedOrigins }));
-app.use(express.json());
+// With DEV_MODE=true in .env (and never in production), also allow the app opened from another
+// device on the same network (e.g. a phone visiting http://192.168.0.238:5173).
+const LOCAL_NETWORK = /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
+const isAllowedOrigin = (origin: string) => allowedOrigins.includes(origin) || (isDevMode() && LOCAL_NETWORK.test(origin));
+
+// Standard browser protection headers. The API only sends JSON and photos, so the page itself
+// (served by Vite or the web host) is not affected; photos are shown on the frontend's address.
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(cors({ origin: (origin, done) => done(null, !origin || isAllowedOrigin(origin)) }));
+// Room for one report photo (up to 5 MB, sent as base64).
+app.use(express.json({ limit: "8mb" }));
+app.use(broadcastChanges);
+
+// Live updates for every logged-in browser.
+app.post("/api/events/ticket", requireAuth, ticketHandler);
+app.get("/api/events", eventsHandler);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -49,6 +67,7 @@ app.get("/api/health/db", async (_req, res) => {
 app.use("/api/auth", authRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/issues", issuesRouter);
+app.use("/api/calls", callsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/categories", categoriesRouter);
@@ -60,9 +79,22 @@ app.use("/api", (_req, res) => {
 
 app.use(errorHandler);
 
-db(); // Load (or create) the data file before taking requests.
-
-app.listen(PORT, () => {
+// Listens on every network interface, so other devices on the same Wi-Fi can connect.
+app.listen(Number(PORT), "0.0.0.0", () => {
   console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Data file: ${DATA_FILE}`);
+  console.log("Data is stored in PostgreSQL (DATABASE_URL in .env).");
 });
+
+// Once an hour (and at start-up), alert students whose reports have gone overdue. Each report
+// alerts its student only once.
+const checkOverdue = () =>
+  alertOverdueReports()
+    .then((sent) => {
+      if (sent) {
+        console.log(`Sent ${sent} overdue alert(s) to students.`);
+        broadcast(["notifications"]);
+      }
+    })
+    .catch((err) => console.error("Overdue check failed:", err));
+void checkOverdue();
+setInterval(checkOverdue, 60 * 60 * 1000);

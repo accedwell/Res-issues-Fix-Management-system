@@ -1,8 +1,9 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { ChatButton } from './Chat'
 import { Icon } from './Icon'
 import { useApp } from '../context/appContext'
-import { PRIORITY_CLASS, STATUS_CLASS } from '../data/constants'
-import { formatDate } from '../utils'
+import { STATUS_CLASS } from '../data/constants'
+import { daysOpen, formatDate, isOverdue, notResolvedReason } from '../utils'
 import type { Issue } from '../types'
 
 export interface StatItem {
@@ -11,22 +12,48 @@ export interface StatItem {
   label: string
   bg: string
   fg: string
+  // When set, the tile becomes a button that opens the matching list.
+  onClick?: () => void
 }
 
 export function StatRow({ items }: { items: StatItem[] }) {
   return (
     <div className="stat-row">
-      {items.map((item) => (
-        <div className="stat-tile" key={item.label} style={{ '--accent': item.fg } as CSSProperties}>
-          <div className="top">
-            <div className="icon-badge">
-              <Icon name={item.icon} />
+      {items.map((item) => {
+        const content = (
+          <>
+            <div className="top">
+              <div className="icon-badge">
+                <Icon name={item.icon} />
+              </div>
+              {item.onClick && (
+                <span className="stat-go">
+                  <Icon name="arrow-right" />
+                </span>
+              )}
             </div>
+            <b>{item.value}</b>
+            <span>{item.label}</span>
+          </>
+        )
+        const style = { '--accent': item.fg } as CSSProperties
+        return item.onClick ? (
+          <button
+            type="button"
+            className="stat-tile stat-tile-link"
+            key={item.label}
+            style={style}
+            onClick={item.onClick}
+            aria-label={`${item.label}: ${item.value}. View list`}
+          >
+            {content}
+          </button>
+        ) : (
+          <div className="stat-tile" key={item.label} style={style}>
+            {content}
           </div>
-          <b>{item.value}</b>
-          <span>{item.label}</span>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -44,8 +71,10 @@ export function EmptyState({ icon, title, sub }: { icon: string; title: string; 
 }
 
 export function IssueRow({ issue, extra }: { issue: Issue; extra?: ReactNode }) {
-  const { catInfo, setModal } = useApp()
+  const { catInfo, setModal, auth } = useApp()
   const category = catInfo(issue.category)
+  const overdue = isOverdue(issue)
+  const notResolved = notResolvedReason(issue)
 
   return (
     <div className="issue-row" onClick={() => setModal({ type: 'detail', issueId: issue.id })}>
@@ -57,13 +86,23 @@ export function IssueRow({ issue, extra }: { issue: Issue; extra?: ReactNode }) 
         <div className="title">
           {issue.title}
           {issue.reopened ? <span className="reopened-tag">Re-opened {issue.reopened}×</span> : null}
+          {overdue && <span className="overdue-tag">Overdue · {daysOpen(issue)} days</span>}
         </div>
         <div className="meta">
           {issue.residence} · Room {issue.room} · {formatDate(issue.dateReported)}
         </div>
+        {notResolved && (
+          <div className="not-resolved-note">
+            <Icon name="x" /> Not resolved: {notResolved.reason}
+          </div>
+        )}
       </div>
-      <span className={'priority-pill ' + PRIORITY_CLASS[issue.priority]}>{issue.priority}</span>
-      <span className={'status-pill ' + STATUS_CLASS[issue.status]}>{issue.status}</span>
+      {/* One grid cell for the chat icon and the status, so the row keeps its four columns. Admins open
+          chats from the report details instead, to keep their long lists tidy. */}
+      <span className="issue-status">
+        {auth.role !== 'admin' && <ChatButton issue={issue} />}
+        <span className={'status-pill ' + STATUS_CLASS[issue.status]}>{issue.status}</span>
+      </span>
       {extra ?? (
         <span className="icon-inline" style={{ color: 'var(--ink-soft)' }}>
           <Icon name="arrow-right" />

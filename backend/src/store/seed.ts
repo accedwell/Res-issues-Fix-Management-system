@@ -111,7 +111,7 @@ export function createSeedData(): Data {
       { key: "plumbing", name: "Plumbing", icon: "droplet" },
       { key: "electrical", name: "Electrical", icon: "zap" },
       { key: "furniture", name: "Furniture", icon: "armchair" },
-      { key: "cleaning", name: "Cleaning", icon: "spray" },
+      { key: "cleaning", name: "Cleaning materials", icon: "spray" },
       { key: "wifi", name: "Wi-Fi / Internet", icon: "wifi" },
       { key: "security", name: "Security", icon: "shield" },
       { key: "heating", name: "Heating / Cooling", icon: "thermometer" },
