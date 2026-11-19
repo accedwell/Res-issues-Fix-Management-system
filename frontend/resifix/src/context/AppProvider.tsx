@@ -3,24 +3,25 @@ import { AppContext, type AppState } from './appContext'
 import {
   apiAddCategory, apiAddUser, apiEditUser, apiAssignIssue, apiReceiveIssue, apiConfirmResolution, apiCreateIssue, apiEditCategory, apiMe,
   apiReadAllNotifications, apiReadNotification, apiRemoveCategory, apiRemoveUser, apiReportNotFixed, apiEditIssue, apiCancelIssue, apiSetSetting,
-  apiUpdateProgress, clearToken, connectLiveUpdates, fetchCategories, fetchIssues, fetchNotifications, fetchSettings,
-  fetchStaff, fetchUsers, getToken, type ApiUser, type Topic,
+  apiSubmitAssistantReport, apiUpdateProgress, clearToken, connectLiveUpdates, fetchCategories, fetchIssues, fetchNotifications, fetchSettings,
+  fetchStaff, fetchUsers, getToken, type ApiUser, type Topic, fetchParts, apiTakePart, apiRequestPart, apiRestockPart, apiAddPart, apiEditPart,
+  apiRemovePart,
 } from '../api'
 import { CATEGORIES, DEFAULT_FILTERS, DEFAULT_TABS, ROLE_NAMES } from '../data/constants'
 import { emitCallSignal } from '../callBus'
 import { isForUser, isOverdue } from '../utils'
-import type { AppNotification, Auth, Category, Filters, Issue, Modal, Role, Route, Setting, Staff, User } from '../types'
+import type { AppNotification, Auth, Category, Filters, Issue, Modal, Role, Route, Setting, SparePart, Staff, StockMovement, User } from '../types'
 
 const LOGGED_OUT: Auth = { loggedIn: false, role: null, name: null, userId: null, studentId: null }
 
-const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings']
+const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings', 'parts']
 const ISSUE_TOPICS: Topic[] = ['issues', 'notifications', 'staff']
 
 // Which data each role is allowed to load from the server.
 const TOPICS_FOR_ROLE: Record<Role, Topic[]> = {
   student: ['issues', 'notifications', 'categories'],
-  maintenance: ['issues', 'notifications', 'categories'],
-  admin: ['issues', 'notifications', 'categories', 'staff'],
+  maintenance: ['issues', 'notifications', 'categories', 'parts'],
+  admin: ['issues', 'notifications', 'categories', 'staff', 'parts'],
   sysadmin: ['issues', 'notifications', 'categories', 'staff', 'users', 'settings'],
 }
 
@@ -54,6 +55,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [staff, setStaff] = useState<Staff[]>([])
   const [categories, setCategories] = useState<Category[]>(CATEGORIES)
   const [settings, setSettings] = useState<Setting[]>([])
+  const [parts, setParts] = useState<SparePart[]>([])
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([])
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
 
   // The live-update handler runs outside React renders, so it reads the current role from here.
@@ -77,6 +80,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUsers([])
     setStaff([])
     setSettings([])
+    setParts([])
+    setStockMovements([])
     setFilters(DEFAULT_FILTERS)
     setRoute('landing')
   }, [])
@@ -98,6 +103,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         staff: async () => setStaff(await fetchStaff()),
         users: async () => setUsers((await fetchUsers()).map(toUserRow)),
         settings: async () => setSettings(await fetchSettings()),
+        parts: async () => {
+          const store = await fetchParts()
+          setParts(store.parts)
+          setStockMovements(store.movements)
+        },
       }
       const results = await Promise.allSettled(wanted.map((t) => loaders[t]()))
       const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
@@ -203,6 +213,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     staff,
     categories,
     settings,
+    parts,
+    stockMovements,
     filters,
     setFilters,
     addIssue: async (data) => {
@@ -211,6 +223,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await refresh(ISSUE_TOPICS)
         setTab('reports')
         showToast('Report submitted — reference ' + issue.ref)
+        return true
+      } catch (err) {
+        showToast(errorMessage(err))
+        return false
+      }
+    },
+    addAssistantIssue: async (report) => {
+      try {
+        const issue = await apiSubmitAssistantReport(report)
+        await refresh(ISSUE_TOPICS)
+        setTab('reports')
+        showToast(
+          issue.assignedToName
+            ? `Report ${issue.ref} sent to ${issue.assignedToName} in maintenance.`
+            : `Report submitted — reference ${issue.ref}`,
+        )
         return true
       } catch (err) {
         showToast(errorMessage(err))
@@ -232,7 +260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         status === 'Resolved'
           ? 'Marked as resolved — the student will be asked to confirm.'
           : status === 'Not Resolved'
-            ? 'Marked as not resolved — the supervisor and student have been told why.'
+            ? 'Marked as not resolved — the staff manager and student have been told why.'
             : 'Progress saved.',
       ),
     confirmResolution: (issue, rating, comment) =>
@@ -268,6 +296,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const current = settings.find((s) => s.key === key)
       return save(() => apiSetSetting(key, !current?.on), ['settings'])
     },
+    takePart: (part, quantity, issueId, note) =>
+      save(
+        () => apiTakePart(part.id, quantity, issueId, note),
+        ['parts'],
+        (res) => `Took ${quantity} × ${part.name}. ${res.part.quantity} left in the store.`,
+      ),
+    requestPart: (part, note) =>
+      save(() => apiRequestPart(part.id, note), ['parts'], `The staff manager has been asked to restock ${part.name}.`),
+    restockPart: (part, quantity, note) =>
+      save(
+        () => apiRestockPart(part.id, quantity, note),
+        ['parts'],
+        (res) => `Added ${quantity} × ${part.name}. ${res.part.quantity} now in the store.`,
+      ),
+    addPart: (part) => save(() => apiAddPart(part), ['parts'], `${part.name} added to the store.`),
+    editPart: (id, part) => save(() => apiEditPart(id, part), ['parts'], `${part.name} updated.`),
+    removePart: (part) => save(() => apiRemovePart(part.id), ['parts'], `${part.name} removed from the store.`),
     markNotificationsRead,
     markNotificationRead: (id) => {
       setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))

@@ -1,3 +1,4 @@
+import { Logo } from '../components/Logo'
 export function AuthBrand({ onClick }: { onClick: () => void }) {
   return (
     <a
@@ -8,7 +9,7 @@ export function AuthBrand({ onClick }: { onClick: () => void }) {
         onClick()
       }}
     >
-      <span className="mark">RF</span>
+      <span className="mark"><Logo /></span>
       <b>ResiFix</b>
     </a>
   )

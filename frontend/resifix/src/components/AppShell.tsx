@@ -1,5 +1,8 @@
+import { Logo } from './Logo'
 import { useEffect, useState } from 'react'
 import { CallManager } from './CallManager'
+import { GuidedTour } from './GuidedTour'
+import { hasSeenTour } from '../tourSeen'
 import { Icon } from './Icon'
 import { ModalHost } from './Modals'
 import { NotificationBell } from './NotificationBell'
@@ -22,6 +25,10 @@ const DASHBOARDS = {
 export function AppShell() {
   const { auth, tabs, setTab, logout, toast, ready } = useApp()
   const [menuOpen, setMenuOpen] = useState(false)
+  // The guided tour starts by itself the first time this account logs in on this browser ("auto"),
+  // and the "?" button opens it again. It waits behind any pop-up, such as a reminder.
+  const [tour, setTour] = useState<'auto' | 'open' | 'closed'>('auto')
+  const tourOpen = ready && (tour === 'open' || (tour === 'auto' && !hasSeenTour(auth.userId)))
   const role = auth.role as Role
   const tab = tabs[role]
   const Dashboard = DASHBOARDS[role]
@@ -46,7 +53,7 @@ export function AppShell() {
       <div style={{ display: 'flex', flex: 1, minWidth: 0, width: '100%' }}>
         <div className="sidebar">
           <a className="brand" href="#" onClick={(e) => e.preventDefault()}>
-            <span className="mark">RF</span>
+            <span className="mark"><Logo /></span>
             ResiFix
           </a>
           <div className="side-role">{ROLE_NAMES[role]}</div>
@@ -56,6 +63,7 @@ export function AppShell() {
                 key={item.key}
                 className={'side-link' + (tab === item.key ? ' active' : '')}
                 onClick={() => goTo(item.key)}
+                data-tour={'nav-' + item.key}
               >
                 <Icon name={item.icon} />
                 {item.label}
@@ -90,7 +98,21 @@ export function AppShell() {
               <h1>{PAGE_TITLES[role][tab] || ''}</h1>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <NotificationBell />
+              <button
+                className="btn btn-ghost btn-sm tour-help"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setTour('open')
+                }}
+                aria-label="Show me around"
+                title="Show me around"
+                data-tour="help"
+              >
+                <Icon name="help" />
+              </button>
+              <span data-tour="bell" style={{ display: 'inline-flex' }}>
+                <NotificationBell />
+              </span>
               <button className="btn btn-ghost btn-sm" onClick={logout}>
                 <Icon name="logout" /> Log out
               </button>
@@ -102,6 +124,7 @@ export function AppShell() {
         </div>
       </div>
       <ModalHost />
+      {tourOpen && <GuidedTour key={tour} onClose={() => setTour('closed')} />}
       {/* Voice calls work on any page, so an incoming call can ring wherever the person is. */}
       {(role === 'student' || role === 'maintenance') && <CallManager />}
       {toast && (

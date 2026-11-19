@@ -1,0 +1,8 @@
+# Python packages for the auto-assigner. Install inside a virtual environment:
+#   python -m venv .venv
+#   .venv\Scripts\pip install -r requirements.txt      (Windows)
+#   .venv/bin/pip install -r requirements.txt          (Mac/Linux)
+groq>=0.30
+psycopg2-binary>=2.9.10
+python-dotenv>=1.0
+requests>=2.32

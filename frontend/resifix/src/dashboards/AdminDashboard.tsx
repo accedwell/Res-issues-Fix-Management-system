@@ -1,3 +1,5 @@
+import { IssueMix } from './IssueMix'
+import { PartsStore } from './PartsStore'
 import { useState, type ChangeEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { EmptyState, IssueRow } from '../components/common'
@@ -13,6 +15,7 @@ import type { Filters, Issue } from '../types'
 
 export function AdminDashboard({ tab }: { tab: string }) {
   if (tab === 'issues') return <AllIssues />
+  if (tab === 'parts') return <PartsStore />
   if (tab === 'reports') return <Reports />
   return <Overview />
 }
@@ -88,6 +91,7 @@ function Overview() {
             <EmptyState icon="check-circle" title="All caught up" sub="Every open report is assigned and on time." />
           )}
         </div>
+        <IssueMix />
         <TeamWorkload />
         <ActivityFeed />
       </div>
@@ -587,7 +591,7 @@ function PeriodReport({ issues, scope }: { issues: Issue[]; scope: string }) {
   const count = badRange ? 0 : issuesInPeriod(issues, period).length
 
   const open = (print: boolean) => {
-    const html = buildReportHtml(issues, period, catInfo, auth.name ?? 'Supervisor', scope)
+    const html = buildReportHtml(issues, period, catInfo, auth.name ?? 'Staff Manager', scope)
     setBlocked(!openReport(html, print))
   }
 

@@ -41,6 +41,13 @@ enum NotificationType {
   SYSTEM
 }
 
+// How stock in the parts store changed.
+enum StockChange {
+  ADDED
+  TAKEN
+  RESTOCKED
+}
+
 enum HistoryAction {
   CREATED
   ASSIGNED
@@ -76,6 +83,7 @@ model User {
   feedback       IssueFeedback[]
   messages       IssueMessage[]
   passwordReset  PasswordReset?
+  stockMovements StockMovement[]
 
   @@index([role])
   @@index([blockId])
@@ -116,18 +124,18 @@ model MaintenanceIssue {
   status      IssueStatus   @default(REPORTED)
   priority    IssuePriority @default(MEDIUM)
 
-  reporterId  String  @map("reporter_id")
-  assigneeId  String? @map("assignee_id")
-  categoryId  String  @map("category_id")
-  blockId     String  @map("block_id")
-  roomNumber  String? @map("room_number")
-  location    String?
-  imageUrl    String? @map("image_url")
-  hasPhoto    Boolean @default(false) @map("has_photo")
+  reporterId          String  @map("reporter_id")
+  assigneeId          String? @map("assignee_id")
+  categoryId          String  @map("category_id")
+  blockId             String  @map("block_id")
+  roomNumber          String? @map("room_number")
+  location            String?
+  imageUrl            String? @map("image_url")
+  hasPhoto            Boolean @default(false) @map("has_photo")
   // How many times the student said it was not fixed.
-  reopenCount Int     @default(0) @map("reopen_count")
+  reopenCount         Int     @default(0) @map("reopen_count")
   // Validated software report plus trusted session metadata; existing residence reports stay unchanged.
-  systemReport Json?  @map("system_report")
+  systemReport        Json?   @map("system_report")
   chatbotSubmissionId String? @unique @map("chatbot_submission_id")
 
   reportedAt DateTime  @default(now()) @map("reported_at")
@@ -137,14 +145,15 @@ model MaintenanceIssue {
   closedAt   DateTime? @map("closed_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  reporter User           @relation("ReportedIssues", fields: [reporterId], references: [id], onDelete: Restrict)
-  assignee User?          @relation("AssignedIssues", fields: [assigneeId], references: [id], onDelete: SetNull)
-  category IssueCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  block    ResidenceBlock @relation(fields: [blockId], references: [id], onDelete: Restrict)
-  history  IssueHistory[]
-  feedback IssueFeedback?
-  photo    IssuePhoto?
-  messages IssueMessage[]
+  reporter  User            @relation("ReportedIssues", fields: [reporterId], references: [id], onDelete: Restrict)
+  assignee  User?           @relation("AssignedIssues", fields: [assigneeId], references: [id], onDelete: SetNull)
+  category  IssueCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  block     ResidenceBlock  @relation(fields: [blockId], references: [id], onDelete: Restrict)
+  history   IssueHistory[]
+  feedback  IssueFeedback?
+  photo     IssuePhoto?
+  messages  IssueMessage[]
+  partsUsed StockMovement[]
 
   @@index([status])
   @@index([priority])
@@ -261,4 +270,49 @@ model PasswordReset {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_resets")
+}
+
+// A spare part kept in the maintenance store room (stove plates, taps, bulbs, ...).
+model SparePart {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  // The kind of job it is for: an issue category key such as "electrical", or empty for general use.
+  category    String?
+  unit        String   @default("each")
+  quantity    Int      @default(0)
+  // When stock drops to this number, the staff manager is told to order more.
+  minQuantity Int      @default(1) @map("min_quantity")
+  // Where to find it, e.g. "Store room, shelf A1".
+  location    String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  movements StockMovement[]
+
+  @@map("spare_parts")
+}
+
+// Every time stock goes in or out of the store: who, how many, and for which job.
+model StockMovement {
+  id        String      @id @default(cuid())
+  partId    String      @map("part_id")
+  userId    String?     @map("user_id")
+  issueId   String?     @map("issue_id")
+  type      StockChange
+  // Positive when stock comes in, negative when it is taken out.
+  change    Int
+  // How many were left afterwards.
+  balance   Int
+  note      String?
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  part  SparePart         @relation(fields: [partId], references: [id], onDelete: Cascade)
+  user  User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  issue MaintenanceIssue? @relation(fields: [issueId], references: [id], onDelete: SetNull)
+
+  @@index([partId, createdAt])
+  @@index([userId])
+  @@index([issueId])
+  @@map("stock_movements")
 }

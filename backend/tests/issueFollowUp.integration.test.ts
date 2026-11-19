@@ -56,7 +56,8 @@ test("account domains and 24-hour follow-up API: validation, access rules, remin
     } });
     server = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], {
       cwd: fileURLToPath(new URL("..", import.meta.url)),
-      env: { ...process.env, DATABASE_URL: databaseUrl, PORT: port, TOKEN_SECRET: process.env.TOKEN_SECRET },
+      // AUTO_ASSIGN off: this test assigns reports itself, as a supervisor.
+      env: { ...process.env, DATABASE_URL: databaseUrl, PORT: port, TOKEN_SECRET: process.env.TOKEN_SECRET, AUTO_ASSIGN: "off" },
       stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
     });
     server.stdout?.on("data", (data) => { logs += String(data); });

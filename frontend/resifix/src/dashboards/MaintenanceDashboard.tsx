@@ -1,3 +1,4 @@
+import { PartsStore } from './PartsStore'
 import { useState } from 'react'
 import { EmptyState, IssueRow } from '../components/common'
 import { useApp } from '../context/appContext'
@@ -8,6 +9,7 @@ import type { Issue } from '../types'
 export function MaintenanceDashboard({ tab }: { tab: string }) {
   const { issues, setModal } = useApp()
   if (tab === 'reports') return <MyWorkReport issues={issues} />
+  if (tab === 'parts') return <PartsStore />
 
   const completed = tab === 'completed'
   // The server only sends maintenance staff the jobs assigned to them.
@@ -36,7 +38,7 @@ export function MaintenanceDashboard({ tab }: { tab: string }) {
         <EmptyState
           icon="tools"
           title={completed ? 'Nothing completed yet' : 'No tasks assigned'}
-          sub="New assignments from supervisors will appear here."
+          sub="New jobs will appear here as soon as they are assigned to you."
         />
       )}
     </div>

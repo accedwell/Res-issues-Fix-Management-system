@@ -4,11 +4,13 @@ import { EmptyState, IssueRow } from '../components/common'
 import { Icon } from '../components/Icon'
 import { ProgressSteps } from '../components/ProgressSteps'
 import { useApp } from '../context/appContext'
-import { fetchSimilarIssues } from '../api'
-import { canUseWebcam, preparePhoto, type PreparedPhoto } from '../photo'
-import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, PRIORITIES, SHARED_PLACES, isReportableCategory } from '../data/constants'
+import { fetchAssistantEnabled } from '../api'
+import { preparePhoto, type PreparedPhoto } from '../photo'
+import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, PRIORITIES, PRIORITY_HELP, SHARED_PLACES, isReportableCategory } from '../data/constants'
 import { canReportNotFixed, formatDate, isForUser, isOpen, matchesView, stop } from '../utils'
-import type { Issue, Priority, SimilarIssue } from '../types'
+import type { Issue, Priority } from '../types'
+import { AlreadyReported, PhotoButtons } from './reportParts'
+import { ReportAssistant, type AssistantDraft } from './ReportAssistant'
 
 export function StudentDashboard({ tab }: { tab: string }) {
   if (tab === 'report') return <ReportIssue />
@@ -76,7 +78,7 @@ function WelcomeBanner({ mine }: { mine: Issue[] }) {
         <h1>Hi {firstName}, how is your room?</h1>
         <p>{message}</p>
         <div className="st-banner-cta">
-          <button className="btn btn-primary" onClick={() => startReport()}>
+          <button className="btn btn-primary" onClick={() => startReport()} data-tour="report-cta">
             <Icon name="plus-circle" /> Report an issue
           </button>
         </div>
@@ -146,7 +148,7 @@ function Overview() {
         </div>
       )}
 
-      <div className="card">
+      <div className="card" data-tour="recent-reports">
         <div className="card-head">
           <h2>Recent reports</h2>
           <button className="btn btn-ghost btn-sm" onClick={() => setTab('reports')}>
@@ -175,102 +177,6 @@ function Overview() {
         </div>
       </div>
     </div>
-  )
-}
-
-// What each priority means, so students can pick the right one.
-const PRIORITY_HELP: Record<Priority, string> = {
-  Low: 'Can wait — small or cosmetic',
-  Normal: 'Annoying, but you can manage',
-  High: 'Affects daily life or study',
-  Urgent: 'Safety risk, flooding, no power',
-}
-
-// While a student fills in the form: open reports of the same kind in the same block, so they can
-// see it is already known before reporting it again. They can still submit if it's a different problem.
-function AlreadyReported({ category, residence, room }: { category: string; residence: string; room: string }) {
-  const { catInfo } = useApp()
-  const [similar, setSimilar] = useState<SimilarIssue[]>([])
-
-  useEffect(() => {
-    if (!category) return
-    let current = true
-    // Wait until the student stops typing the room before asking.
-    const timer = setTimeout(() => {
-      fetchSimilarIssues(category, residence, room)
-        .then((found) => current && setSimilar(found))
-        .catch(() => current && setSimilar([]))
-    }, 400)
-    return () => {
-      current = false
-      clearTimeout(timer)
-    }
-  }, [category, residence, room])
-
-  const shown = category ? similar : []
-  if (!shown.length) return null
-  const inRoom = shown.some((s) => s.sameRoom)
-
-  return (
-    <div className="already-reported" role="status">
-      <b>
-        <Icon name="flag" />
-        {inRoom
-          ? `This may already be reported in ${room.trim()}`
-          : `${plural(shown.length, 'open report', 'open reports')} for ${catInfo(category).name} in ${residence}`}
-      </b>
-      <ul>
-        {shown.map((s) => (
-          <li key={s.ref} className={s.sameRoom ? 'same-room' : ''}>
-            <span>
-              <span className="ref">{s.ref}</span> {s.title}
-              {s.mine && <span className="mine-tag">Your report</span>}
-            </span>
-            <small>
-              {s.room} · reported {formatDate(s.dateReported)} · {s.status}
-            </small>
-          </li>
-        ))}
-      </ul>
-      <p>If it's the same problem, there's no need to report it again — maintenance already knows. If it's a different problem, carry on.</p>
-    </div>
-  )
-}
-
-// "Take a photo" opens the phone camera (or the laptop webcam); "Upload a photo" picks a saved picture.
-function PhotoButtons({
-  onFile,
-  openCamera,
-  disabled = false,
-  small = false,
-}: {
-  onFile: (file: File | undefined) => void
-  openCamera: () => void
-  disabled?: boolean
-  small?: boolean
-}) {
-  const size = small ? ' btn-sm' : ''
-  const pick = (e: ChangeEvent<HTMLInputElement>) => {
-    onFile(e.target.files?.[0])
-    e.target.value = '' // so the same picture can be chosen again after Remove
-  }
-  return (
-    <>
-      {canUseWebcam() ? (
-        <button type="button" className={'btn btn-primary' + size} onClick={openCamera} disabled={disabled}>
-          <Icon name="camera" /> Take a photo
-        </button>
-      ) : (
-        <label className={'btn btn-primary' + size}>
-          <Icon name="camera" /> Take a photo
-          <input type="file" accept="image/*" capture="environment" disabled={disabled} onChange={pick} />
-        </label>
-      )}
-      <label className={'btn btn-ghost' + size}>
-        <Icon name="image" /> Upload a photo
-        <input type="file" accept="image/*" disabled={disabled} onChange={pick} />
-      </label>
-    </>
   )
 }
 
@@ -315,6 +221,27 @@ function ReportIssue() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // The AI assistant is offered first when the server has it switched on; the form is always there too.
+  const [assistantOn, setAssistantOn] = useState(false)
+  const [mode, setMode] = useState<'assistant' | 'form'>('assistant')
+  useEffect(() => {
+    let current = true
+    fetchAssistantEnabled()
+      .then((on) => current && setAssistantOn(on))
+      .catch(() => current && setAssistantOn(false))
+    return () => {
+      current = false
+    }
+  }, [])
+  // "Change details" on the assistant's report: carry it into the form to edit by hand.
+  const applyAssistantDraft = (draft: AssistantDraft) => {
+    setForm((f) => ({ ...f, title: draft.title, category: draft.category, priority: draft.priority, room: draft.room, description: draft.description }))
+    setElsewhere(draft.room !== homeRoom)
+    setError('')
+    setMode('form')
+  }
+  const showAssistant = assistantOn && mode === 'assistant'
+
   const field =
     (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [key]: e.target.value }))
@@ -330,7 +257,7 @@ function ReportIssue() {
   }
 
   return (
-    <div className="card st-report">
+    <div className="card st-report" data-tour="report-card">
       <div className="st-report-head">
         <span className="badge">
           <Icon name="plus-circle" />
@@ -338,11 +265,27 @@ function ReportIssue() {
         <div>
           <h2>Report a residence issue</h2>
           <p className="card-sub" style={{ margin: 0 }}>
-            Four quick steps. You'll get a reference number and updates as it's fixed.
+            {showAssistant
+              ? 'Describe it in your own words and the assistant writes the report for you.'
+              : "Four quick steps. You'll get a reference number and updates as it's fixed."}
           </p>
         </div>
       </div>
 
+      {assistantOn && (
+        <div className="st-mode" data-tour="report-mode" role="tablist" aria-label="How to report">
+          <button type="button" role="tab" aria-selected={mode === 'assistant'} className={mode === 'assistant' ? 'active' : ''} onClick={() => setMode('assistant')}>
+            <Icon name="chat" /> Ask the assistant
+          </button>
+          <button type="button" role="tab" aria-selected={mode === 'form'} className={mode === 'form' ? 'active' : ''} onClick={() => setMode('form')}>
+            <Icon name="clipboard" /> Fill in the form
+          </button>
+        </div>
+      )}
+
+      {showAssistant ? (
+        <ReportAssistant onUseForm={applyAssistantDraft} />
+      ) : (
       <form onSubmit={submit}>
         <section className="st-step">
           <h3>
@@ -495,6 +438,7 @@ function ReportIssue() {
           </button>
         </div>
       </form>
+      )}
     </div>
   )
 }

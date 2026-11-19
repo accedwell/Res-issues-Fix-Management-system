@@ -27,14 +27,14 @@ Every sample account uses the password **`password123`**.
 | Role | Email |
 |---|---|
 | Student | `naledi@resStudent.ac.za`, `karabo.s@resStudent.ac.za` |
-| Supervisor | `mokgadi@resStaff.ac.za` |
+| Staff manager | `mokgadi@resStaff.ac.za` |
 | Maintenance (Plumbing) | `t.nkosi@resStaff.ac.za` |
 | Maintenance (Electrical) | `l.mokoena@resStaff.ac.za` |
 | Maintenance (General) | `s.dlamini@resStaff.ac.za` |
 | Maintenance (IT / Wi-Fi) | `a.khumalo@resStaff.ac.za` |
 | System admin | `sysadmin@resStaff.ac.za` |
 
-Students must use `@resStudent.ac.za`. Supervisors, maintenance staff and system administrators must use `@resStaff.ac.za`. Addresses are stored in lowercase and accepted case-insensitively.
+Students must use `@resStudent.ac.za`. Staff managers, maintenance staff and system administrators must use `@resStaff.ac.za`. Addresses are stored in lowercase and accepted case-insensitively.
 
 After configuring the intended local database, `npm run migrate:email-domains` updates existing active accounts to these domains while keeping account IDs, passwords and report ownership. The script runs in a transaction and stops if an address conflicts with an existing account.
 

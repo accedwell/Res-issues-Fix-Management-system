@@ -3,6 +3,7 @@ import { Icon } from './Icon'
 import { IssuePhoto } from './IssuePhoto'
 import { ProgressSteps } from './ProgressSteps'
 import { ChatModal } from './Chat'
+import { PartFormModal, RemovePartModal, RequestPartModal, RestockPartModal, TakePartModal } from './PartModals'
 import { useApp } from '../context/appContext'
 import { PasswordInput } from './PasswordInput'
 import {
@@ -12,7 +13,7 @@ import { canEditReport, canReportNotFixed, emailDomainForRole, formatDate, isEma
 import type { Category, Issue, Priority, Role, Status } from '../types'
 
 export function ModalHost() {
-  const { modal, setModal, issues } = useApp()
+  const { modal, setModal, issues, parts } = useApp()
   if (!modal) return null
 
   const close = () => setModal(null)
@@ -41,6 +42,25 @@ export function ModalHost() {
     case 'removeCategory':
       content = <RemoveCategoryModal categoryKey={modal.categoryKey} close={close} />
       break
+    case 'addPart':
+      content = <PartFormModal close={close} />
+      break
+    case 'takePart':
+    case 'requestPart':
+    case 'restockPart':
+    case 'editPart':
+    case 'removePart': {
+      const part = parts.find((p) => p.id === modal.partId)
+      if (!part) return null
+      content = {
+        takePart: <TakePartModal part={part} close={close} />,
+        requestPart: <RequestPartModal part={part} close={close} />,
+        restockPart: <RestockPartModal part={part} close={close} />,
+        editPart: <PartFormModal part={part} close={close} />,
+        removePart: <RemovePartModal part={part} close={close} />,
+      }[modal.type]
+      break
+    }
     default:
       if (!issue) return null
       content = {
@@ -121,6 +141,14 @@ function DetailModal({ issue, close }: IssueModalProps) {
         </div>
       ) : null}
       <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.55 }}>{issue.description}</p>
+      {issue.assistantNotes && auth.role !== 'student' && (
+        <div className="ai-notes">
+          <b>
+            <Icon name="tools" /> Assistant's notes for maintenance
+          </b>
+          <p>{issue.assistantNotes}</p>
+        </div>
+      )}
       <IssuePhoto issue={issue} />
       <table className="simple" style={{ marginBottom: 14 }}>
         <tbody>
@@ -435,7 +463,7 @@ function EditReportModal({ issue, close }: IssueModalProps) {
     <div className="modal">
       <h3>Edit report</h3>
       <p className="modal-sub">
-        {issue.ref} — you can change it until the supervisor receives it.
+        {issue.ref} — you can change it until the staff manager receives it.
       </p>
       <div className="field">
         <label>Short title</label>
@@ -505,7 +533,7 @@ function CancelReportModal({ issue, close }: IssueModalProps) {
         {issue.ref} — {issue.title}
       </p>
       <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.55 }}>
-        The report will be removed and the supervisor will be told it was cancelled. This can't be undone — if the
+        The report will be removed and the staff manager will be told it was cancelled. This can't be undone — if the
         problem comes back, report it again.
       </p>
       <div className="modal-actions">

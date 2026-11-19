@@ -61,7 +61,7 @@ async function main() {
   const users = [
     {
       id: "user-admin",
-      fullName: "ResiFix Supervisor",
+      fullName: "ResiFix Staff Manager",
       email: "admin@resstaff.ac.za",
       role: "ADMIN" as const,
       studentNumber: null,

@@ -75,6 +75,39 @@ export interface Issue {
   reopened?: number
   // Sent by the server when the viewer may see the chat on this report (see Chat.tsx).
   chat?: ChatSummary | null
+  // Only on reports filed with the AI assistant: its notes for maintenance (likely cause, what to bring).
+  assistantNotes?: string
+}
+
+// ===== AI report assistant =====
+
+export interface AssistantMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+// The report the assistant has put together from the conversation so far.
+export interface ReportDraft {
+  title: string
+  category: string
+  priority: Priority
+  room: string
+  description: string
+  maintenanceNotes: string
+}
+
+export interface AssistantReply {
+  reply: string
+  // True once the assistant knows what is wrong and where, so the report can be submitted.
+  ready: boolean
+  draft: ReportDraft
+}
+
+// What the app sends to file the assistant's report. The same submissionId is sent again on a
+// retry, so a double tap or lost connection never files the report twice.
+export interface AssistantSubmission extends ReportDraft {
+  submissionId: string
+  photo?: PhotoUpload
 }
 
 export interface NewIssue {
@@ -116,6 +149,50 @@ export interface User {
   block?: string
   room?: string
   specialization?: string
+}
+
+// A spare part in the maintenance store room.
+export interface SparePart {
+  id: string
+  name: string
+  // Issue category key it is for (e.g. 'electrical'), or '' for general use.
+  category: string
+  unit: string
+  quantity: number
+  // Order more when stock drops to this.
+  minQuantity: number
+  location: string
+  // At or below the order level.
+  low: boolean
+}
+
+// One change to stock: a part taken for a job, or more added by the staff manager.
+export interface StockMovement {
+  id: string
+  partId: string
+  partName: string
+  unit: string
+  type: 'added' | 'taken' | 'restocked'
+  // Positive in, negative out.
+  change: number
+  // How many were left afterwards.
+  balance: number
+  by: string | null
+  issueId: string | null
+  issueRef: string | null
+  note: string
+  at: string
+}
+
+// What the staff manager fills in to add or edit a part.
+export interface PartInput {
+  name: string
+  category: string
+  unit: string
+  minQuantity: number
+  location: string
+  // Starting stock; only used when adding a part.
+  quantity?: number
 }
 
 export interface Setting {
@@ -163,6 +240,8 @@ export type Modal =
   | { type: 'addCategory' }
   | { type: 'editCategory'; categoryKey: string }
   | { type: 'removeCategory'; categoryKey: string }
+  | { type: 'addPart' }
+  | { type: 'takePart' | 'restockPart' | 'editPart' | 'removePart' | 'requestPart'; partId: string }
 
 // Chat on a report between the student and the assigned staff member. Admins can only read it.
 export interface ChatSummary {

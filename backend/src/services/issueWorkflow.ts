@@ -1,3 +1,4 @@
+import { runAutoAssign } from "../lib/autoAssign.js";
 import { badRequest, forbidden, notFound, today } from "../lib/http.js";
 import { getCategory, OTHER_CATEGORY } from "../store/categories.js";
 import { newId } from "../store/db.js";
@@ -95,7 +96,9 @@ export interface NewIssueInput {
   photo?: { mimeType: string; data: Buffer };
 }
 
-export async function createIssue(student: User, input: NewIssueInput): Promise<Issue> {
+// After saving, the Python auto-assigner gives the report to a technician in the background.
+// The AI assistant passes autoAssign: false because it assigns the report itself straight away.
+export async function createIssue(student: User, input: NewIssueInput, options: { autoAssign?: boolean } = {}): Promise<Issue> {
   const { photo, ...details } = input;
   const category = (await getCategory(details.category)) ? details.category : OTHER_CATEGORY;
   const reportedAt = new Date().toISOString();
@@ -120,6 +123,7 @@ export async function createIssue(student: User, input: NewIssueInput): Promise<
   await notifyStudent(issue, `Your report ${issue.ref} was submitted.`);
   const urgent = issue.priority === "Urgent" ? "URGENT " : "";
   await notifyAdmins(issue, `New ${urgent}report ${issue.ref}: ${issue.title} (${issue.residence}, ${issue.room}).`);
+  if (options.autoAssign !== false) runAutoAssign(issue.id, issue.ref);
   return issue;
 }
 
@@ -159,13 +163,14 @@ export async function receiveIssue(id: string): Promise<Issue> {
   const issue = await getIssue(id);
   if (!issue) throw notFound("Issue not found");
   if (issue.status !== "Submitted") throw badRequest("Only newly submitted reports can be marked as received");
-  const updated = await updateIssue(id, withStatus(issue, "Received", "Reviewed by supervisor."));
+  const updated = await updateIssue(id, withStatus(issue, "Received", "Reviewed by the staff manager."));
   await notifyStudent(updated, `${issue.ref} was received.`);
   return updated;
 }
 
 // Admin assigns maintenance staff. Without a staffId, the system picks the best match for the job.
-export async function assignIssue(id: string, staffId?: string, priority?: Priority): Promise<Issue> {
+// assignedBy says who did it in the report's history ("by the staff manager" unless the assistant did it).
+export async function assignIssue(id: string, staffId?: string, priority?: Priority, assignedBy = "by the staff manager"): Promise<Issue> {
   const issue = await getIssue(id);
   if (!issue) throw notFound("Issue not found");
   if (DONE_STATUSES.includes(issue.status)) throw badRequest("This issue is already resolved or closed");
@@ -180,7 +185,7 @@ export async function assignIssue(id: string, staffId?: string, priority?: Prior
     if (!staff) throw badRequest("There is no maintenance staff to assign this to");
   }
 
-  const note = `Assigned to ${staff.name} (${staff.specialization}) by supervisor.`;
+  const note = `Assigned to ${staff.name} (${staff.specialization}) ${assignedBy}.`;
   const updated = await updateIssue(id, {
     assignedTo: staff.id,
     priority: priority ?? issue.priority,

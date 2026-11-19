@@ -2,6 +2,7 @@ import { Router, type Request } from "express";
 import { currentUser, requireAuth, requireRole } from "../middleware/auth.js";
 import { badRequest, notFound, optionalString, requireOneOf, requireString } from "../lib/http.js";
 import { recommendStaff, staffWorkload } from "../services/assignment.js";
+import { submitAssistantReport } from "../services/assistant.js";
 import { chatSummaries, getChat, sendMessage } from "../services/chat.js";
 import {
   assignIssue,
@@ -116,6 +117,30 @@ issuesRouter.post("/", requireRole("student"), async (req, res) => {
     residence,
     room: studentRoom(req, body),
     description: requireString(body, "description", "Description"),
+    photo: readPhoto(body.photo),
+  });
+  res.status(201).json({ issue: await present(req, issue) });
+});
+
+// POST /api/issues/assistant — a student submits the report the AI assistant put together.
+// { submissionId, title, category, priority, room, description, maintenanceNotes?, photo? }
+// It is filed and assigned to the matching maintenance person straight away.
+issuesRouter.post("/assistant", requireRole("student"), async (req, res) => {
+  const body = req.body ?? {};
+  const residence = currentUser(req).block ?? requireString(body, "residence", "Block");
+  if (!(await listBlocks()).includes(residence)) throw badRequest("Unknown block");
+  const submissionId = requireString(body, "submissionId", "Submission id");
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(submissionId)) throw badRequest("Submission id is not valid");
+
+  const issue = await submitAssistantReport(currentUser(req), {
+    submissionId,
+    title: requireString(body, "title", "Title").slice(0, 80),
+    category: requireString(body, "category", "Category"),
+    priority: body.priority === undefined ? "Normal" : requireOneOf(body, "priority", PRIORITIES),
+    residence,
+    room: studentRoom(req, body),
+    description: requireString(body, "description", "Description").slice(0, 1500),
+    maintenanceNotes: (optionalString(body, "maintenanceNotes") ?? "").slice(0, 500),
     photo: readPhoto(body.photo),
   });
   res.status(201).json({ issue: await present(req, issue) });

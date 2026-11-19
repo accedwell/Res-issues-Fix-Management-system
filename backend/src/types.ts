@@ -71,6 +71,8 @@ export interface Issue {
   history: HistoryEntry[];
   feedback: Feedback | null;
   reopened: number;
+  // Only on reports filed with the AI assistant: its notes for maintenance (likely cause, what to bring).
+  assistantNotes?: string;
 }
 
 export interface Notification {
@@ -87,6 +89,53 @@ export interface Setting {
   key: string;
   label: string;
   on: boolean;
+}
+
+// A spare part in the maintenance store room.
+export interface SparePart {
+  id: string;
+  name: string;
+  // Issue category key it is for (e.g. "electrical"), or "" for general use.
+  category: string;
+  unit: string;
+  quantity: number;
+  // Order more when stock drops to this.
+  minQuantity: number;
+  location: string;
+  // True when stock is at or below minQuantity.
+  low: boolean;
+}
+
+export type StockChangeType = "added" | "taken" | "restocked";
+
+// One change to stock: a part taken for a job, or more added by the staff manager.
+export interface StockMovement {
+  id: string;
+  partId: string;
+  partName: string;
+  unit: string;
+  type: StockChangeType;
+  // Positive in, negative out.
+  change: number;
+  // How many were left afterwards.
+  balance: number;
+  by: string | null;
+  issueId: string | null;
+  issueRef: string | null;
+  note: string;
+  at: string;
+}
+
+// Sample parts for `npm run reset-data`.
+export interface SeedPart {
+  name: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  minQuantity: number;
+  location: string;
+  // Sample uses: who took one and for which job.
+  taken?: { userId: string; issueId: string; quantity: number; note: string; date: string }[];
 }
 
 // A pending "forgot password" request. Only a hash of the code is stored.
@@ -108,4 +157,6 @@ export interface Data {
   nextIssueNumber: number;
   // Optional so data files created before this feature still load.
   passwordResets?: PasswordReset[];
+  // Spare parts in the store room. Optional for the same reason.
+  parts?: SeedPart[];
 }

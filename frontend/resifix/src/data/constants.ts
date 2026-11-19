@@ -14,6 +14,22 @@ export const CATEGORIES: Category[] = [
   { key: 'other', name: 'Other', icon: 'dots' },
 ]
 
+// Each category in everyday words: what the problem actually is. Used where the staff manager reads
+// the mix of reports (Home page chart). Categories added later just show their own name.
+export const CATEGORY_PLAIN: Record<string, string> = {
+  plumbing: 'Leaking taps, pipes and toilets',
+  electrical: 'Plugs, power and stoves not working',
+  furniture: 'Broken beds, chairs and cupboards',
+  cleaning: 'Cleaning supplies running out',
+  wifi: 'Wi-Fi and internet down',
+  security: 'Locks, gates and safety',
+  heating: 'Heating or air-con not working',
+  damage: 'Damaged walls, doors and windows',
+  water: 'No water or no hot water',
+  lighting: 'Lights and bulbs not working',
+  other: 'Other problems',
+}
+
 // Keep historical category labels available while excluding these from report choices.
 export const isReportableCategory = (category: Category) =>
   !['security', 'heating', 'cat-security', 'cat-hvac'].includes(category.key)
@@ -43,6 +59,14 @@ export const STATUS_CLASS: Record<Status, string> = {
 
 export const PRIORITIES: Priority[] = ['Low', 'Normal', 'High', 'Urgent']
 
+// What each priority means, so students can pick the right one.
+export const PRIORITY_HELP: Record<Priority, string> = {
+  Low: 'Can wait — small or cosmetic',
+  Normal: 'Annoying, but you can manage',
+  High: 'Affects daily life or study',
+  Urgent: 'Safety risk, flooding, no power',
+}
+
 export const PRIORITY_CLASS: Record<Priority, string> = {
   Low: 'priority-low',
   Normal: 'priority-normal',
@@ -68,7 +92,7 @@ export const SPECIALIZATIONS = ['Plumbing', 'Electrical', 'IT / Wi-Fi', GENERAL_
 
 export const ROLE_NAMES: Record<Role, string> = {
   student: 'Student',
-  admin: 'Supervisor',
+  admin: 'Staff Manager',
   maintenance: 'Maintenance Staff',
   sysadmin: 'System Administrator',
 }
@@ -82,11 +106,13 @@ export const NAV: Record<Role, NavItem[]> = {
   admin: [
     { key: 'overview', label: 'Home', icon: 'home' },
     { key: 'issues', label: 'All Issues', icon: 'list' },
+    { key: 'parts', label: 'Parts Store', icon: 'box' },
     { key: 'reports', label: 'Reports', icon: 'file-text' },
   ],
   maintenance: [
     { key: 'assigned', label: 'Assigned to Me', icon: 'tools' },
     { key: 'completed', label: 'Completed', icon: 'check-circle' },
+    { key: 'parts', label: 'Parts Store', icon: 'box' },
     { key: 'reports', label: 'My Reports', icon: 'file-text' },
   ],
   sysadmin: [
@@ -98,8 +124,8 @@ export const NAV: Record<Role, NavItem[]> = {
 
 export const PAGE_TITLES: Record<Role, Record<string, string>> = {
   student: { overview: 'Home', report: 'Report an Issue', reports: 'My Reports', notifications: 'Notifications' },
-  admin: { overview: 'Home', issues: 'All Issues', reports: 'Reports' },
-  maintenance: { assigned: 'Assigned to Me', completed: 'Completed Tasks', reports: 'My Reports' },
+  admin: { overview: 'Home', issues: 'All Issues', parts: 'Parts Store', reports: 'Reports' },
+  maintenance: { assigned: 'Assigned to Me', completed: 'Completed Tasks', parts: 'Parts Store', reports: 'My Reports' },
   sysadmin: { users: 'Manage Users', categories: 'Manage Categories', settings: 'System Settings' },
 }
 

@@ -47,7 +47,14 @@ function toIssue(row: IssueRow): Issue {
     })),
     feedback: row.feedback ? { rating: row.feedback.rating, comment: row.feedback.comment ?? "" } : null,
     reopened: row.reopenCount,
+    ...assistantNotes(row.systemReport),
   };
+}
+
+// Notes the AI report assistant wrote for maintenance, when the report came from the assistant.
+function assistantNotes(report: Prisma.JsonValue | null): Pick<Issue, "assistantNotes"> {
+  const notes = report && typeof report === "object" && !Array.isArray(report) ? report.maintenanceNotes : undefined;
+  return typeof notes === "string" && notes ? { assistantNotes: notes } : {};
 }
 
 // The database row for one history entry. offsetMs keeps entries from the same day in order.
@@ -85,6 +92,17 @@ export async function listIssues(query: IssueQuery = {}): Promise<Issue[]> {
 export async function getIssue(id: string): Promise<Issue | undefined> {
   const row = await prisma.maintenanceIssue.findUnique({ where: { id }, include: withDetails });
   return row ? toIssue(row) : undefined;
+}
+
+// The report filed from one AI assistant submission, if it was already filed.
+export async function findBySubmission(submissionId: string): Promise<Issue | undefined> {
+  const row = await prisma.maintenanceIssue.findUnique({ where: { chatbotSubmissionId: submissionId }, include: withDetails });
+  return row ? toIssue(row) : undefined;
+}
+
+// Keeps what the AI assistant produced with the report, and the submission id that stops a double submit.
+export async function saveAssistantReport(id: string, report: Prisma.InputJsonObject, submissionId: string): Promise<void> {
+  await prisma.maintenanceIssue.update({ where: { id }, data: { systemReport: report, chatbotSubmissionId: submissionId } });
 }
 
 export async function insertIssue(issue: Issue): Promise<Issue> {

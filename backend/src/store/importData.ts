@@ -14,6 +14,8 @@ export async function loadData(data: Data): Promise<void> {
   await prisma.$transaction(
     async (tx) => {
       await tx.passwordReset.deleteMany();
+      await tx.stockMovement.deleteMany();
+      await tx.sparePart.deleteMany();
       await tx.notification.deleteMany();
       await tx.issueFeedback.deleteMany();
       await tx.issueHistory.deleteMany();
@@ -82,6 +84,31 @@ export async function loadData(data: Data): Promise<void> {
             ...(issue.feedback
               ? { feedback: { create: { userId: issue.studentId, rating: issue.feedback.rating, comment: issue.feedback.comment || null } } }
               : {}),
+          },
+        });
+      }
+
+      // The store room: each part with its current stock, plus any sample uses of it.
+      for (const part of data.parts ?? []) {
+        await tx.sparePart.create({
+          data: {
+            name: part.name,
+            category: part.category || null,
+            unit: part.unit,
+            quantity: part.quantity,
+            minQuantity: part.minQuantity,
+            location: part.location || null,
+            movements: {
+              create: (part.taken ?? []).map((use, i) => ({
+                type: "TAKEN" as const,
+                userId: use.userId,
+                issueId: use.issueId,
+                change: -use.quantity,
+                balance: part.quantity,
+                note: use.note || null,
+                createdAt: fromDay(use.date, i),
+              })),
+            },
           },
         });
       }

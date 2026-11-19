@@ -31,7 +31,7 @@ export function createSeedData(): Data {
         studentId: "stu-1", studentName: "Naledi Mahlangu", assignedTo: "stf-1", dateReported: "2026-09-20", photo: true,
         history: [
           { status: "Submitted", date: "2026-09-20", note: "Report submitted by student." },
-          { status: "Received", date: "2026-09-20", note: "Reviewed by supervisor." },
+          { status: "Received", date: "2026-09-20", note: "Reviewed by the staff manager." },
           { status: "Assigned", date: "2026-09-21", note: "Assigned to Thabo Nkosi (Plumbing)." },
           { status: "In Progress", date: "2026-09-22", note: "Technician on site, replacement part ordered." },
         ],
@@ -44,7 +44,7 @@ export function createSeedData(): Data {
         studentId: "stu-1", studentName: "Naledi Mahlangu", assignedTo: "stf-4", dateReported: "2026-09-24", photo: false,
         history: [
           { status: "Submitted", date: "2026-09-24", note: "Report submitted by student." },
-          { status: "Received", date: "2026-09-24", note: "Reviewed by supervisor." },
+          { status: "Received", date: "2026-09-24", note: "Reviewed by the staff manager." },
           { status: "Assigned", date: "2026-09-25", note: "Assigned to Ayanda Khumalo (IT / Wi-Fi)." },
         ],
         feedback: null, reopened: 0,
@@ -56,7 +56,7 @@ export function createSeedData(): Data {
         studentId: "stu-1", studentName: "Naledi Mahlangu", assignedTo: "stf-3", dateReported: "2026-09-10", photo: true,
         history: [
           { status: "Submitted", date: "2026-09-10", note: "Report submitted by student." },
-          { status: "Received", date: "2026-09-10", note: "Reviewed by supervisor." },
+          { status: "Received", date: "2026-09-10", note: "Reviewed by the staff manager." },
           { status: "Assigned", date: "2026-09-11", note: "Assigned to Sipho Dlamini." },
           { status: "In Progress", date: "2026-09-12", note: "Chair collected for repair." },
           { status: "Resolved", date: "2026-09-14", note: "Chair repaired and returned to common room." },
@@ -70,7 +70,7 @@ export function createSeedData(): Data {
         studentId: "stu-1", studentName: "Naledi Mahlangu", assignedTo: "stf-2", dateReported: "2026-08-29", photo: false,
         history: [
           { status: "Submitted", date: "2026-08-29", note: "Report submitted by student." },
-          { status: "Received", date: "2026-08-29", note: "Reviewed by supervisor." },
+          { status: "Received", date: "2026-08-29", note: "Reviewed by the staff manager." },
           { status: "Assigned", date: "2026-08-30", note: "Assigned to Lindiwe Mokoena." },
           { status: "In Progress", date: "2026-08-31", note: "Faulty ballast identified." },
           { status: "Resolved", date: "2026-09-01", note: "Light fitting replaced." },
@@ -85,7 +85,7 @@ export function createSeedData(): Data {
         studentId: "stu-2", studentName: "Karabo Sithole", assignedTo: null, dateReported: "2026-09-27", photo: true,
         history: [
           { status: "Submitted", date: "2026-09-27", note: "Report submitted by student." },
-          { status: "Received", date: "2026-09-27", note: "Reviewed by supervisor — flagged urgent." },
+          { status: "Received", date: "2026-09-27", note: "Reviewed by the staff manager — flagged urgent." },
         ],
         feedback: null, reopened: 0,
       },
@@ -126,6 +126,29 @@ export function createSeedData(): Data {
       { key: "notify", label: "Auto-notify students on every status change", on: true },
       { key: "photo", label: "Require photo evidence on resolution", on: true },
       { key: "escalate", label: "Enable urgent priority escalation email", on: false },
+    ],
+
+    // The maintenance store room. A few are low or out, to show the staff manager's alerts.
+    parts: [
+      { name: "Stove plate 145 mm", category: "electrical", unit: "each", quantity: 3, minQuantity: 2, location: "Store room, shelf A1" },
+      { name: "Stove plate 180 mm", category: "electrical", unit: "each", quantity: 1, minQuantity: 2, location: "Store room, shelf A1" },
+      { name: "Stove control switch", category: "electrical", unit: "each", quantity: 4, minQuantity: 2, location: "Store room, shelf A2" },
+      { name: "Double plug socket", category: "electrical", unit: "each", quantity: 6, minQuantity: 2, location: "Store room, shelf A2" },
+      { name: "Circuit breaker 20 A", category: "electrical", unit: "each", quantity: 4, minQuantity: 2, location: "Store room, shelf A3" },
+      { name: "LED bulb 9 W (E27)", category: "lighting", unit: "each", quantity: 24, minQuantity: 10, location: "Store room, shelf B1",
+        taken: [{ userId: "stf-2", issueId: "i-4", quantity: 2, note: "Replaced both hallway bulbs", date: "2026-08-30" }] },
+      { name: "Fluorescent tube 1.2 m", category: "lighting", unit: "each", quantity: 6, minQuantity: 4, location: "Store room, shelf B1" },
+      { name: "Tap washer set", category: "plumbing", unit: "pack", quantity: 18, minQuantity: 5, location: "Store room, shelf C1",
+        taken: [{ userId: "stf-1", issueId: "i-1", quantity: 1, note: "", date: "2026-09-22" }] },
+      { name: "Basin mixer tap", category: "plumbing", unit: "each", quantity: 2, minQuantity: 2, location: "Store room, shelf C1" },
+      { name: "Toilet cistern flush kit", category: "plumbing", unit: "set", quantity: 3, minQuantity: 2, location: "Store room, shelf C2" },
+      { name: "Shower head", category: "water", unit: "each", quantity: 0, minQuantity: 2, location: "Store room, shelf C2" },
+      { name: "Geyser element 3 kW", category: "water", unit: "each", quantity: 2, minQuantity: 1, location: "Store room, shelf C3" },
+      { name: "Door handle set", category: "furniture", unit: "set", quantity: 5, minQuantity: 2, location: "Store room, shelf D1" },
+      { name: "Bed slat", category: "furniture", unit: "each", quantity: 12, minQuantity: 6, location: "Store room, floor rack" },
+      { name: "Wardrobe hinge", category: "furniture", unit: "each", quantity: 10, minQuantity: 4, location: "Store room, shelf D2" },
+      { name: "Window latch", category: "damage", unit: "each", quantity: 6, minQuantity: 2, location: "Store room, shelf D2" },
+      { name: "Network cable 3 m", category: "wifi", unit: "each", quantity: 8, minQuantity: 3, location: "Store room, shelf E1" },
     ],
 
     blocks: ["Block A", "Block B", "Block C", "Block D", "Block E", "Block F"],

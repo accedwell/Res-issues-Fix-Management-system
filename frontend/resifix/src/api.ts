@@ -1,4 +1,22 @@
-import type { AppNotification, Category, ChatMessage, Issue, NewIssue, Priority, Role, Setting, SimilarIssue, Staff, Status } from './types'
+import type {
+  AppNotification,
+  AssistantMessage,
+  AssistantReply,
+  AssistantSubmission,
+  Category,
+  ChatMessage,
+  Issue,
+  NewIssue,
+  Priority,
+  Role,
+  PartInput,
+  Setting,
+  SimilarIssue,
+  SparePart,
+  Staff,
+  Status,
+  StockMovement,
+} from './types'
 import { getToken, saveToken } from './authSession'
 export { getToken, clearToken } from './authSession'
 
@@ -124,6 +142,17 @@ export const apiConfirmResolution = (id: string, rating: number | null, comment:
   request('POST', `/issues/${id}/confirm`, { rating, comment })
 export const apiReportNotFixed = (id: string, reason: string) => request('POST', `/issues/${id}/not-fixed`, { reason })
 
+// ===== AI report assistant =====
+
+// Whether the server has the assistant switched on (it needs a Groq key in backend/.env).
+export const fetchAssistantEnabled = async () => (await request<{ enabled: boolean }>('GET', '/assistant')).enabled
+// One turn of the conversation: the messages so far in, the assistant's reply and draft report out.
+export const apiAskAssistant = (messages: AssistantMessage[]) =>
+  request<AssistantReply>('POST', '/assistant/chat', { messages })
+// Files the assistant's report; the server assigns it to the matching maintenance person straight away.
+export const apiSubmitAssistantReport = async (report: AssistantSubmission) =>
+  (await request<{ issue: Issue }>('POST', '/issues/assistant', report)).issue
+
 // The chat on a report. Opening it marks the other person's messages as read.
 export const fetchChat = (id: string) => request<{ messages: ChatMessage[]; canSend: boolean }>('GET', `/issues/${id}/messages`)
 export const apiSendMessage = (id: string, body: string) =>
@@ -158,12 +187,24 @@ export const apiEditCategory = (key: string, name: string, icon: string) =>
 export const apiRemoveCategory = (key: string) => request<{ movedReports: number }>('DELETE', `/categories/${key}`)
 export const apiSetSetting = (key: string, on: boolean) => request('PATCH', `/settings/${key}`, { on })
 
+// ===== Parts store (maintenance staff and the staff manager) =====
+
+export const fetchParts = () => request<{ parts: SparePart[]; movements: StockMovement[] }>('GET', '/parts')
+export const apiTakePart = (id: string, quantity: number, issueId: string, note: string) =>
+  request<{ part: SparePart }>('POST', `/parts/${id}/take`, { quantity, issueId: issueId || undefined, note })
+export const apiRequestPart = (id: string, note: string) => request('POST', `/parts/${id}/request`, { note })
+export const apiRestockPart = (id: string, quantity: number, note: string) =>
+  request<{ part: SparePart }>('POST', `/parts/${id}/restock`, { quantity, note })
+export const apiAddPart = (part: PartInput) => request<{ part: SparePart }>('POST', '/parts', part)
+export const apiEditPart = (id: string, part: PartInput) => request<{ part: SparePart }>('PATCH', `/parts/${id}`, part)
+export const apiRemovePart = (id: string) => request('DELETE', `/parts/${id}`)
+
 // ===== Live updates =====
 
-export type Topic = 'issues' | 'notifications' | 'users' | 'staff' | 'categories' | 'settings'
+export type Topic = 'issues' | 'notifications' | 'users' | 'staff' | 'categories' | 'settings' | 'parts'
 
 const RECONNECT_MS = 3000
-const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings']
+const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings', 'parts']
 
 // Opens the server's live-update stream. Calls onChange with the kinds of data that changed.
 // Voice-call messages ("call" events) are passed to onCall. Returns a function that closes it.
