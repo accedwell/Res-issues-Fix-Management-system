@@ -5,6 +5,14 @@ import type {
   AssistantSubmission,
   Category,
   ChatMessage,
+  AttendanceRow,
+  ClockCode,
+  DutySchedules,
+  DutyShift,
+  DutyStatus,
+  Leave,
+  Schedule,
+  WorkHours,
   Issue,
   NewIssue,
   Priority,
@@ -199,12 +207,37 @@ export const apiAddPart = (part: PartInput) => request<{ part: SparePart }>('POS
 export const apiEditPart = (id: string, part: PartInput) => request<{ part: SparePart }>('PATCH', `/parts/${id}`, part)
 export const apiRemovePart = (id: string) => request('DELETE', `/parts/${id}`)
 
+// ===== Clock-in (QR code) =====
+
+// Technicians
+export const fetchMyDuty = () => request<DutyStatus>('GET', '/duty/me')
+export const apiClockIn = (code: string) => request<DutyStatus>('POST', '/duty/clock-in', { code })
+// handBack: unfinished jobs to give back to the staff manager when leaving.
+export const apiClockOut = (handBack: string[] = []) => request<DutyStatus>('POST', '/duty/clock-out', { handBack })
+export const apiStartBreak = (minutes: number) => request<DutyStatus>('POST', '/duty/break', { minutes })
+export const apiEndBreak = () => request<DutyStatus>('POST', '/duty/break/end')
+
+// Staff manager
+export const fetchClockInCode = () => request<ClockCode>('GET', '/duty/code')
+export const apiRenewClockInCode = () => request<{ ok: boolean }>('POST', '/duty/code')
+export const apiSetCodeMode = (mode: ClockCode['mode']) => request<{ mode: ClockCode['mode'] }>('PUT', '/duty/mode', { mode })
+export const fetchShiftsToday = async () => (await request<{ shifts: DutyShift[] }>('GET', '/duty/shifts')).shifts
+export const fetchSchedules = () => request<DutySchedules>('GET', '/duty/schedules')
+export const apiSetTeamHours = (hours: WorkHours) => request<{ team: WorkHours }>('PUT', '/duty/hours', hours)
+// null puts them back on the team's hours.
+export const apiSetSchedule = (userId: string, hours: WorkHours | null) =>
+  request<{ schedule: Schedule }>('PUT', `/duty/schedules/${userId}`, hours ?? { useTeam: true })
+export const apiAddLeave = (leave: Omit<Leave, 'id'>) => request<{ leave: Leave }>('POST', '/duty/leave', leave)
+export const apiRemoveLeave = (id: string) => request('DELETE', `/duty/leave/${id}`)
+export const fetchAttendance = (month: string) =>
+  request<{ month: string; rows: AttendanceRow[] }>('GET', `/duty/attendance?month=${encodeURIComponent(month)}`)
+
 // ===== Live updates =====
 
-export type Topic = 'issues' | 'notifications' | 'users' | 'staff' | 'categories' | 'settings' | 'parts'
+export type Topic = 'issues' | 'notifications' | 'users' | 'staff' | 'categories' | 'settings' | 'parts' | 'duty'
 
 const RECONNECT_MS = 3000
-const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings', 'parts']
+const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings', 'parts', 'duty']
 
 // Opens the server's live-update stream. Calls onChange with the kinds of data that changed.
 // Voice-call messages ("call" events) are passed to onCall. Returns a function that closes it.

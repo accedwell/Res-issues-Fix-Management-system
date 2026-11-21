@@ -3,7 +3,7 @@ import { assistantModel, groqJson, type ChatTurn } from "../lib/groq.js";
 import { listCategories, OTHER_CATEGORY } from "../store/categories.js";
 import { findBySubmission, getIssue, saveAssistantReport } from "../store/issues.js";
 import { PRIORITIES, SHARED_PLACES, type Issue, type Priority, type User } from "../types.js";
-import { assignIssue, createIssue } from "./issueWorkflow.js";
+import { alertNobodyOnDuty, assignIssue, createIssue } from "./issueWorkflow.js";
 
 // The AI report assistant: a student describes a problem in their own words, the assistant turns it
 // into a report, and once the student submits it the report goes straight to the right maintenance person.
@@ -146,10 +146,12 @@ export async function submitAssistantReport(student: User, input: AssistantSubmi
   const issue = await createIssue(student, report, { autoAssign: false });
   await saveAssistantReport(issue.id, { source: "assistant", model: assistantModel(), maintenanceNotes }, submissionId);
   try {
-    return await assignIssue(issue.id, undefined, undefined, "automatically by the ResiFix assistant");
+    return await assignIssue(issue.id, undefined, undefined, "automatically by the ResiFix assistant", true);
   } catch (err) {
-    // No maintenance staff yet: the report stays Submitted and the staff manager assigns it later.
+    // Nobody on duty (or no staff at all): the report stays Submitted. It goes to the first
+    // technician who clocks in, or the staff manager assigns it.
     console.error(`Could not auto-assign ${issue.ref}:`, err instanceof Error ? err.message : err);
+    await alertNobodyOnDuty(issue);
     return (await getIssue(issue.id)) ?? issue;
   }
 }

@@ -107,6 +107,7 @@ export const NAV: Record<Role, NavItem[]> = {
     { key: 'overview', label: 'Home', icon: 'home' },
     { key: 'issues', label: 'All Issues', icon: 'list' },
     { key: 'parts', label: 'Parts Store', icon: 'box' },
+    { key: 'duty', label: 'Clock-in', icon: 'clock' },
     { key: 'reports', label: 'Reports', icon: 'file-text' },
   ],
   maintenance: [
@@ -124,7 +125,7 @@ export const NAV: Record<Role, NavItem[]> = {
 
 export const PAGE_TITLES: Record<Role, Record<string, string>> = {
   student: { overview: 'Home', report: 'Report an Issue', reports: 'My Reports', notifications: 'Notifications' },
-  admin: { overview: 'Home', issues: 'All Issues', parts: 'Parts Store', reports: 'Reports' },
+  admin: { overview: 'Home', issues: 'All Issues', parts: 'Parts Store', duty: 'Clock-in & Who Is On Duty', reports: 'Reports' },
   maintenance: { assigned: 'Assigned to Me', completed: 'Completed Tasks', parts: 'Parts Store', reports: 'My Reports' },
   sysadmin: { users: 'Manage Users', categories: 'Manage Categories', settings: 'System Settings' },
 }

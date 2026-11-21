@@ -48,6 +48,13 @@ async function notifyAdmins(issue: Issue, message: string) {
   for (const admin of await listUsers("admin")) await addNotification(admin.id, message, issue.id);
 }
 
+// A report that is waiting because nobody has clocked in. Urgent ones can't wait, so the staff
+// manager is told straight away to call someone in. Others go out when the next technician clocks in.
+export async function alertNobodyOnDuty(issue: Issue) {
+  if (issue.priority !== "Urgent") return;
+  await notifyAdmins(issue, `URGENT ${issue.ref} — ${issue.title} is waiting: no technician is on duty. Please call someone in or assign it.`);
+}
+
 async function notifyStaff(issue: Issue, message: string) {
   if (issue.assignedTo) await addNotification(issue.assignedTo, message, issue.id);
 }
@@ -170,7 +177,14 @@ export async function receiveIssue(id: string): Promise<Issue> {
 
 // Admin assigns maintenance staff. Without a staffId, the system picks the best match for the job.
 // assignedBy says who did it in the report's history ("by the staff manager" unless the assistant did it).
-export async function assignIssue(id: string, staffId?: string, priority?: Priority, assignedBy = "by the staff manager"): Promise<Issue> {
+// onDutyOnly (automatic assigning) only picks technicians who have clocked in.
+export async function assignIssue(
+  id: string,
+  staffId?: string,
+  priority?: Priority,
+  assignedBy = "by the staff manager",
+  onDutyOnly = false,
+): Promise<Issue> {
   const issue = await getIssue(id);
   if (!issue) throw notFound("Issue not found");
   if (DONE_STATUSES.includes(issue.status)) throw badRequest("This issue is already resolved or closed");
@@ -181,8 +195,10 @@ export async function assignIssue(id: string, staffId?: string, priority?: Prior
     if (!user || user.role !== "maintenance") throw badRequest("That person is not maintenance staff");
     staff = user;
   } else {
-    staff = await recommendStaff(issue);
-    if (!staff) throw badRequest("There is no maintenance staff to assign this to");
+    staff = await recommendStaff(issue, { onDutyOnly });
+    if (!staff) {
+      throw badRequest(onDutyOnly ? "No technician is on duty right now" : "There is no maintenance staff to assign this to");
+    }
   }
 
   const note = `Assigned to ${staff.name} (${staff.specialization}) ${assignedBy}.`;
@@ -193,6 +209,22 @@ export async function assignIssue(id: string, staffId?: string, priority?: Prior
   });
   await notifyStudent(updated, `${issue.ref} has been assigned to ${staff.name}.`, true);
   await notifyStaff(updated, `New job: ${issue.ref} — ${issue.title} (${issue.residence}, ${issue.room}).`);
+  return updated;
+}
+
+// A technician clocking out hands an unfinished job back, so someone still at work can take it.
+// It goes back to Received with nobody assigned, and the staff manager is told.
+export async function handBackJob(user: User, id: string): Promise<Issue> {
+  const issue = await getIssue(id);
+  if (!issue) throw notFound("Issue not found");
+  if (issue.assignedTo !== user.id) throw forbidden("This job is not assigned to you");
+  if (DONE_STATUSES.includes(issue.status)) throw badRequest("This issue is already resolved or closed");
+  const updated = await updateIssue(id, {
+    assignedTo: null,
+    ...withStatus(issue, "Received", `Handed back by ${user.name} when clocking out. Waiting for someone else.`),
+  });
+  const urgent = issue.priority === "Urgent" ? "URGENT " : "";
+  await notifyAdmins(updated, `Handed back: ${user.name} clocked out and handed back ${urgent}${issue.ref} — ${issue.title}. It needs someone else.`);
   return updated;
 }
 

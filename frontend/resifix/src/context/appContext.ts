@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { NewUserInput } from '../api'
 import type {
-  AppNotification, AssistantSubmission, Auth, Category, Filters, Issue, Modal, NewIssue, PartInput, Priority, Role, Route, Setting, SparePart, Staff,
+  AppNotification, AssistantSubmission, Auth, Category, DutyStatus, Filters, Issue, Modal, NewIssue, PartInput, Priority, Role, Route, Setting, SparePart, Staff,
   Status, StockMovement, User,
 } from '../types'
 
@@ -58,6 +58,17 @@ export interface AppState {
   addPart: (part: PartInput) => Promise<boolean>
   editPart: (id: string, part: PartInput) => Promise<boolean>
   removePart: (part: SparePart) => Promise<boolean>
+  // Maintenance only: whether they are clocked in. Null for other roles.
+  duty: DutyStatus | null
+  // True when the clock-in QR code was scanned and is waiting for the technician to log in.
+  pendingClockIn: boolean
+  // Clock in with today's code (from the QR code, or typed), and clock out.
+  clockIn: (code: string) => Promise<boolean>
+  // handBack: unfinished jobs given back to the staff manager when leaving.
+  clockOut: (handBack: string[]) => Promise<boolean>
+  startBreak: (minutes: number) => Promise<boolean>
+  // "I'm back" before the break time is up.
+  endBreak: () => Promise<boolean>
   markNotificationsRead: () => void
   markNotificationRead: (id: string) => void
   catInfo: (key: string) => Category

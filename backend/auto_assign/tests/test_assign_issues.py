@@ -54,9 +54,14 @@ class FakeCursor:
             self.rowcount = self.update_rowcount
         elif "SELECT reporter_id" in sql:
             self._next = {"reporter_id": "student-1"}
+        elif "role = 'ADMIN'" in sql:
+            self._next = [{"id": "manager-1"}]
 
     def fetchone(self):
         return self._next
+
+    def fetchall(self):
+        return self._next or []
 
     def find(self, text):
         return [(sql, params) for sql, params in self.statements if text in sql]
@@ -215,10 +220,25 @@ class ProcessIssueTests(unittest.TestCase):
         self.assertFalse(cursor.find("assignee_id IS NULL"))  # never set to Assigned
         note = cursor.find("INSERT INTO issue_history")[0][1]
         self.assertEqual(note[3], "Submitted")
-        self.assertIn("no technician is available", note[4])
+        self.assertIn("no technician is on duty", note[4])
         self.assertFalse(cursor.find("INSERT INTO notifications"))
         self.assertEqual(conn.commits, 1)
         email.assert_not_called()
+
+    def test_only_technicians_on_duty_are_considered(self):
+        self.assertIn("duty_shifts", aa.FIND_TECHNICIAN_SQL)
+        self.assertIn("clock_out_at IS NULL", aa.FIND_TECHNICIAN_SQL)
+        self.assertIn("break_until", aa.FIND_TECHNICIAN_SQL)
+
+    def test_urgent_report_with_nobody_on_duty_alerts_the_staff_manager(self):
+        cursor = FakeCursor(technicians=[None, None, None])
+        outcome, _, _ = self.run_with(
+            new_report(priority="URGENT"), {"category": "plumbing", "priority": "URGENT", "reason": "", "source": "keywords"}, cursor)
+        self.assertEqual(outcome, "no_technician")
+        (_, params), = cursor.find("INSERT INTO notifications")
+        self.assertEqual(params[1], "manager-1")
+        self.assertEqual(params[2], "SYSTEM")
+        self.assertIn("no technician is on duty", params[4])
 
     def test_never_overwrites_an_existing_assignment(self):
         cursor = FakeCursor(technicians=[PLUMBER], update_rowcount=0)  # a supervisor got there first

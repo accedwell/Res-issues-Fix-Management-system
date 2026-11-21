@@ -24,13 +24,16 @@ function pythonCommand(): string {
 // Switched off with AUTO_ASSIGN=off in .env, and always inside automated tests.
 export const isAutoAssignOn = () => process.env.AUTO_ASSIGN !== "off" && !process.env.NODE_TEST_CONTEXT && existsSync(SCRIPT);
 
-export function runAutoAssign(issueId: string, ref: string): void {
+// With an issue, handles that one new report. Without one (after a technician clocks in), it goes
+// through every report still waiting for someone, so they reach whoever is now on duty.
+export function runAutoAssign(issueId?: string, ref = "waiting reports"): void {
   if (!isAutoAssignOn()) return;
 
   let output = "";
-  const child = spawn(pythonCommand(), [SCRIPT, issueId], {
+  const child = spawn(pythonCommand(), issueId ? [SCRIPT, issueId] : [SCRIPT], {
     cwd: SCRIPT_DIR,
-    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+    // AUTO_ASSIGN_GROQ_API_KEY gives it its own key, so it doesn't share the assistant's free limit.
+    env: { ...process.env, GROQ_API_KEY: process.env.AUTO_ASSIGN_GROQ_API_KEY || process.env.GROQ_API_KEY, PYTHONIOENCODING: "utf-8" },
     windowsHide: true,
   });
   const timer = setTimeout(() => child.kill(), TIME_LIMIT_MS);
@@ -46,6 +49,6 @@ export function runAutoAssign(issueId: string, ref: string): void {
     const summary = output.trim().split("\n").slice(-3).join(" | ");
     if (code === 0) console.log(`Auto-assign ${ref}: ${summary}`);
     else console.error(`Auto-assign failed for ${ref} (exit ${code}): ${summary}`);
-    broadcast(["issues", "notifications", "staff"]);
+    broadcast(["issues", "notifications", "staff", "duty"]);
   });
 }

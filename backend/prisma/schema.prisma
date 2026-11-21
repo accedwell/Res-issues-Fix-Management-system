@@ -84,6 +84,9 @@ model User {
   messages       IssueMessage[]
   passwordReset  PasswordReset?
   stockMovements StockMovement[]
+  dutyShifts     DutyShift[]
+  schedule       StaffSchedule?
+  leave          StaffLeave[]
 
   @@index([role])
   @@index([blockId])
@@ -315,4 +318,57 @@ model StockMovement {
   @@index([userId])
   @@index([issueId])
   @@map("stock_movements")
+}
+
+// One stretch of work for a maintenance technician: from scanning the clock-in QR code to clocking out.
+// While clockOutAt is empty they are on duty, and only on-duty technicians are given new jobs.
+model DutyShift {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  clockInAt  DateTime  @default(now()) @map("clock_in_at")
+  clockOutAt DateTime? @map("clock_out_at")
+  // True when the system clocked them out because they forgot.
+  autoClosed Boolean   @default(false) @map("auto_closed")
+  // A break in progress: no new jobs until breakUntil (or until they say they are back).
+  breakStartedAt DateTime? @map("break_started_at")
+  breakUntil     DateTime? @map("break_until")
+  // Minutes of finished breaks in this shift, left out of hours worked.
+  breakMinutes   Int       @default(0) @map("break_minutes")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, clockOutAt])
+  @@index([clockInAt])
+  @@map("duty_shifts")
+}
+
+// A technician's own working days and hours, set by the staff manager. Without one, the team's
+// work hours apply.
+model StaffSchedule {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  // Weekdays worked, 0 = Sunday ... 6 = Saturday, e.g. "1,2,3,4,5".
+  days      String
+  startTime String   @map("start_time")
+  endTime   String   @map("end_time")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("staff_schedules")
+}
+
+// Days a technician is away (leave, sick, training). Dates are "YYYY-MM-DD", both days included.
+model StaffLeave {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  startDate String   @map("start_date")
+  endDate   String   @map("end_date")
+  reason    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startDate])
+  @@map("staff_leave")
 }

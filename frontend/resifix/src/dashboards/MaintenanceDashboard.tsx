@@ -1,6 +1,7 @@
 import { PartsStore } from './PartsStore'
 import { useState } from 'react'
 import { EmptyState, IssueRow } from '../components/common'
+import { DutyCard } from '../components/DutyCard'
 import { useApp } from '../context/appContext'
 import { issuesInPeriod, monthPeriod } from '../periodReport'
 import { formatDate, isOpen, stop } from '../utils'
@@ -16,6 +17,8 @@ export function MaintenanceDashboard({ tab }: { tab: string }) {
   const tasks = issues.filter((i) => (completed ? !isOpen(i) : isOpen(i)))
 
   return (
+    <>
+    {!completed && <DutyCard />}
     <div className="card">
       <p className="card-sub">{tasks.length} issue(s)</p>
       {tasks.length ? (
@@ -42,6 +45,7 @@ export function MaintenanceDashboard({ tab }: { tab: string }) {
         />
       )}
     </div>
+    </>
   )
 }
 

@@ -1,3 +1,5 @@
+import { ClockIn } from './ClockIn'
+import { AttendanceReport } from './dutyParts'
 import { IssueMix } from './IssueMix'
 import { PartsStore } from './PartsStore'
 import { useState, type ChangeEvent } from 'react'
@@ -16,6 +18,7 @@ import type { Filters, Issue } from '../types'
 export function AdminDashboard({ tab }: { tab: string }) {
   if (tab === 'issues') return <AllIssues />
   if (tab === 'parts') return <PartsStore />
+  if (tab === 'duty') return <ClockIn />
   if (tab === 'reports') return <Reports />
   return <Overview />
 }
@@ -760,6 +763,8 @@ function Reports() {
           <StudentFeedback issues={issues} />
         </>
       )}
+      {/* Technicians' attendance from clock-ins; not affected by the report search above. */}
+      <AttendanceReport />
     </div>
   )
 }

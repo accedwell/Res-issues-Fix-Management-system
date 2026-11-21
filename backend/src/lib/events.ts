@@ -7,7 +7,7 @@ import { getUser } from "../store/users.js";
 // after any change the server tells all of them which kinds of data to reload. Voice-call messages
 // go only to the browsers of the person being called (see sendToUser).
 
-export type Topic = "issues" | "notifications" | "users" | "staff" | "categories" | "settings" | "parts";
+export type Topic = "issues" | "notifications" | "users" | "staff" | "categories" | "settings" | "parts" | "duty";
 
 // Each open connection and the user it belongs to.
 const clients = new Map<Response, string>();
@@ -72,6 +72,7 @@ function topicsFor(path: string): Topic[] {
   if (path.startsWith("/api/categories")) return ["categories", "issues"];
   if (path.startsWith("/api/settings")) return ["settings"];
   if (path.startsWith("/api/parts")) return ["parts", "notifications"];
+  if (path.startsWith("/api/duty")) return ["duty", "staff", "notifications"];
   if (path === "/api/auth/signup") return ["users"];
   return [];
 }

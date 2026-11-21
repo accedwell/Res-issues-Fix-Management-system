@@ -58,8 +58,11 @@ export const canReportNotFixed = (issue: Issue) =>
   DONE_STATUSES.includes(issue.status) || issue.status === 'Not Resolved' || isOverdue(issue)
 
 // Picks the staff member whose job matches the issue category, preferring whoever has the fewest open jobs.
+// People on duty come first; when nobody is on duty, anyone is suggested (same as the server).
 // Returns undefined only when there is no maintenance staff at all.
-export function recommendStaff(issue: Issue, staff: Staff[]): Staff | undefined {
+export function recommendStaff(issue: Issue, everyone: Staff[]): Staff | undefined {
+  const onDuty = everyone.filter((s) => s.onDuty)
+  const staff = onDuty.length ? onDuty : everyone
   const specialization = CATEGORY_SPECIALIZATION[issue.category] ?? GENERAL_SPECIALIZATION
   const matching = staff.filter((s) => s.specialization === specialization)
   const general = staff.filter((s) => s.specialization === GENERAL_SPECIALIZATION)
@@ -87,7 +90,10 @@ export function lastReopen(issue: Issue): { date: string; reason: string } | und
 }
 
 // Rooms are typed by students, so compare them ignoring case and extra spaces.
-export const sameRoom = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+// A time of day like "07:58" (24-hour, same as the clock-in alerts).
+export const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+
+export const sameRoom =(a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 export const initials = (name: string) =>
   name

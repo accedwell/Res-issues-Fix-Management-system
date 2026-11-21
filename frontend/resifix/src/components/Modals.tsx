@@ -293,7 +293,7 @@ function AssignModal({ issue, close }: IssueModalProps) {
           {staff.map((s) => (
             <option key={s.id} value={s.id}>
               {s.id === recommended.id ? '★ ' : ''}
-              {s.name} — {s.specialization} ({s.openJobs} open)
+              {s.name} — {s.specialization} ({s.openJobs} open){s.onBreak ? ' · on break' : s.onDuty ? ' · on duty' : s.onLeaveToday ? ' · on leave' : ' · off duty'}
             </option>
           ))}
         </select>

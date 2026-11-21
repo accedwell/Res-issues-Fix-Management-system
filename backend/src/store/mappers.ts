@@ -53,6 +53,14 @@ export function historyAction(status: Status, note: string): HistoryAction {
 export function notificationKind(message: string): { type: NotificationType; title: string } {
   // First, because chat text can contain any of the words matched below.
   if (/^New message/i.test(message)) return { type: "COMMENT_ADDED", title: "New message" };
+  if (/^Clocked in:/i.test(message)) return { type: "SYSTEM", title: "Clocked in" };
+  if (/^Clocked out:/i.test(message)) return { type: "SYSTEM", title: "Clocked out" };
+  if (/^Not clocked in:/i.test(message)) return { type: "SYSTEM", title: "Not clocked in" };
+  if (/^On break:/i.test(message)) return { type: "SYSTEM", title: "On break" };
+  if (/^Back from break:/i.test(message)) return { type: "SYSTEM", title: "Back from break" };
+  if (/^Handed back:/i.test(message)) return { type: "STATUS_UPDATED", title: "Job handed back" };
+  if (/^Leave recorded/i.test(message)) return { type: "SYSTEM", title: "Leave" };
+  if (/^Your work hours/i.test(message)) return { type: "SYSTEM", title: "Work hours" };
   if (/^Out of stock/i.test(message)) return { type: "SYSTEM", title: "Out of stock" };
   if (/^Low stock/i.test(message)) return { type: "SYSTEM", title: "Low stock" };
   if (/^Restock request/i.test(message)) return { type: "SYSTEM", title: "Restock request" };

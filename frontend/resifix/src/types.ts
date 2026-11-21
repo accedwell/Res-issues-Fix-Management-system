@@ -36,6 +36,104 @@ export interface Staff {
   specialization: string
   // Unfinished jobs, as counted by the server.
   openJobs: number
+  // Clocked in with the QR code, and since when. Only on-duty technicians get new jobs automatically.
+  onDuty: boolean
+  onDutySince: string | null
+  // Clocked in but on a break until breakUntil: no new jobs.
+  onBreak: boolean
+  breakUntil: string | null
+  onLeaveToday: boolean
+  // On duty and not on a break.
+  available: boolean
+}
+
+// When the working day starts and ends, e.g. "07:30" and "16:30", and the weekdays worked
+// (0 = Sunday ... 6 = Saturday). Set by the staff manager.
+export interface WorkHours {
+  start: string
+  end: string
+  days: number[]
+}
+
+// One technician's hours. custom is false when they just follow the team's hours.
+export interface Schedule extends WorkHours {
+  custom: boolean
+}
+
+// Days away; dates are "YYYY-MM-DD", both days included.
+export interface Leave {
+  id: string
+  userId: string
+  startDate: string
+  endDate: string
+  reason: string
+}
+
+// The logged-in technician's own clock-in state.
+export interface DutyStatus {
+  onDuty: boolean
+  since: string | null
+  onBreak: boolean
+  breakUntil: string | null
+  // Forgetting to clock out ends the shift after this many hours.
+  maxHours: number
+  // Break lengths they can pick, in minutes.
+  breakOptions: number[]
+  schedule: Schedule
+  onLeaveToday: boolean
+  // Their leave from today on.
+  leave: Leave[]
+}
+
+// One clock-in today, for the staff manager's list.
+export interface DutyShift {
+  id: string
+  userId: string
+  name: string
+  clockInAt: string
+  clockOutAt: string | null
+  autoClosed: boolean
+  onBreak: boolean
+  breakMinutes: number
+  // Minutes late (0 = on time or early; null on a day they don't normally work).
+  lateMinutes: number | null
+  // Minutes before the end of work they clocked out, when they left early.
+  earlyMinutes: number | null
+}
+
+// The code to show at the office: the printed daily code, or the wall screen's 30-second code.
+export interface ClockCode {
+  mode: 'daily' | 'rotating'
+  code: string
+  day: string
+  // Wall screen only: when the next code appears.
+  changesAt: string | null
+  rotateSeconds: number
+}
+
+// What the staff manager's Clock-in page needs about hours and leave.
+export interface DutySchedules {
+  team: WorkHours
+  today: string
+  people: { userId: string; schedule: Schedule; onLeaveToday: boolean }[]
+  leave: Leave[]
+}
+
+// One technician's month in the attendance report.
+export interface AttendanceRow {
+  userId: string
+  name: string
+  specialization: string
+  scheduledDays: number
+  daysWorked: number
+  missedDays: number
+  leaveDays: number
+  lateDays: number
+  lateMinutes: number
+  earlyLeaves: number
+  forgotClockOut: number
+  hoursWorked: number
+  breakMinutes: number
 }
 
 export interface HistoryEntry {

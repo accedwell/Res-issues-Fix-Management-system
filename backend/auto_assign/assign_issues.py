@@ -6,7 +6,8 @@ Gives new residence reports to a maintenance technician automatically.
 1. Reads new, unassigned reports from PostgreSQL (the same database as the backend).
 2. Asks Groq (AI) what kind of job it is and how urgent. If Groq is down, slow, over its free
    limit, or answers nonsense, simple keyword matching is used instead, so assignment never breaks.
-3. Picks the technician with the matching job and the fewest open jobs (plain SQL, no AI).
+3. Picks the technician with the matching job and the fewest open jobs (plain SQL, no AI), from
+   those on duty (clocked in with the QR code). If nobody is on duty the report waits.
 4. Saves the assignment, a history entry and notifications, in the same format as the backend.
 5. Optionally emails the technician through Brevo.
 
@@ -167,6 +168,11 @@ FIND_TECHNICIAN_SQL = """
             AND i.status NOT IN ('RESOLVED', 'CLOSED')
      WHERE u.role = 'MAINTENANCE'
        AND u.is_active = TRUE
+       -- On duty: clocked in with the QR code, not clocked out yet, and not on a break.
+       -- (Times are stored as UTC without a time zone, hence NOW() AT TIME ZONE 'UTC'.)
+       AND EXISTS (SELECT 1 FROM duty_shifts s
+                    WHERE s.user_id = u.id AND s.clock_out_at IS NULL
+                      AND (s.break_until IS NULL OR s.break_until <= NOW() AT TIME ZONE 'UTC'))
        AND (%(skill)s IS NULL OR COALESCE(u.specialization, 'General Maintenance') = %(skill)s)
      GROUP BY u.id, u.full_name, u.email, u.specialization, u.created_at
      ORDER BY open_jobs ASC, u.created_at ASC
@@ -175,7 +181,7 @@ FIND_TECHNICIAN_SQL = """
 
 
 def find_technician(cur, category: str):
-    """The matching technician; if nobody has that job, general maintenance; then anyone."""
+    """The matching technician on duty; if nobody with that job is in, general maintenance; then anyone on duty."""
     skill = CATEGORY_SPECIALIZATION.get(category, GENERAL_SPECIALIZATION)
     for wanted in (skill, GENERAL_SPECIALIZATION, None):
         cur.execute(FIND_TECHNICIAN_SQL, {"skill": wanted})
@@ -207,11 +213,11 @@ def add_history(cur, issue_id: str, status: str, action: str, note: str) -> None
     )
 
 
-def add_notification(cur, user_id: str, issue_id: str, title: str, message: str) -> None:
+def add_notification(cur, user_id: str, issue_id: str, title: str, message: str, kind: str = "ISSUE_ASSIGNED") -> None:
     cur.execute(
         "INSERT INTO notifications (id, user_id, type, title, message, is_read, issue_id, created_at) "
-        "VALUES (%s, %s, 'ISSUE_ASSIGNED', %s, %s, FALSE, %s, NOW())",
-        (new_id("n"), user_id, title, message, issue_id),
+        "VALUES (%s, %s, %s, %s, %s, FALSE, %s, NOW())",
+        (new_id("n"), user_id, kind, title, message, issue_id),
     )
 
 
@@ -299,16 +305,24 @@ def process_issue(conn, issue, categories: dict) -> str:
         tech = find_technician(cur, category)
 
         if tech is None:
-            # Nobody to give it to: keep the better category/priority and leave it for the staff manager.
+            # Nobody on duty: keep the better category/priority. It goes to the first technician who
+            # clocks in (the backend runs this script again then), or the staff manager assigns it.
             cur.execute(
                 "UPDATE maintenance_issues SET category_id = %s, priority = %s, updated_at = NOW() WHERE id = %s",
                 (category, priority, issue["id"]),
             )
             add_history(cur, issue["id"], "Submitted", "COMMENT_ADDED",
                         f"Auto-assign: looks like {categories.get(category, category)}, but no technician is "
-                        "available. The staff manager needs to assign it.")
+                        "on duty. It will go to the first technician who clocks in, or the staff manager can assign it.")
+            # Urgent reports can't wait for someone to clock in: tell the staff manager now.
+            if priority == "URGENT":
+                cur.execute("SELECT id FROM users WHERE role = 'ADMIN' AND is_active = TRUE")
+                for manager in cur.fetchall():
+                    add_notification(cur, manager["id"], issue["id"], "Nobody on duty",
+                                     f"URGENT {issue['reference']} — {issue['title']} is waiting: no technician is "
+                                     "on duty. Please call someone in or assign it.", "SYSTEM")
             conn.commit()
-            log("  ! no technician available, left for the staff manager")
+            log("  ! no technician on duty, waiting for someone to clock in")
             return "no_technician"
 
         # Only if still unassigned and new, so an admin's choice is never overwritten.
@@ -355,7 +369,9 @@ def main(argv) -> int:
             if len(argv) > 1:
                 cur.execute(ISSUE_SQL + " WHERE i.id = %s", (argv[1],))
             else:
-                cur.execute(ISSUE_SQL + " WHERE i.status = 'REPORTED' AND i.assignee_id IS NULL ORDER BY i.reported_at")
+                # Everything still waiting for a technician, oldest first (run after someone clocks in).
+                cur.execute(ISSUE_SQL + " WHERE i.status IN ('REPORTED', 'RECEIVED') AND i.assignee_id IS NULL "
+                            "ORDER BY i.reported_at")
             issues = cur.fetchall()
         conn.commit()
 

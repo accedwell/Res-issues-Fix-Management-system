@@ -501,7 +501,8 @@ table.simple tbody tr:hover td { background: rgba(77, 143, 240, .06); }
 @media (max-width: 640px) {
   .container { padding: 0 16px; }
   .topnav nav { display: none; }
-  .topnav .btn-ghost { display: none; }
+  .topnav .actions { gap: 6px; }
+  .topnav .actions .btn { padding-left: 12px; padding-right: 12px; }
   .hero { padding: 100px 0 70px; }
   .hero::before { background: linear-gradient(180deg, rgba(5, 15, 38, .8) 0%, rgba(5, 15, 38, .92) 60%, var(--bg) 100%); }
   .hero .cta .btn { width: 100%; }
@@ -518,8 +519,25 @@ table.simple tbody tr:hover td { background: rgba(77, 143, 240, .06); }
   .cta-band { padding: 34px 26px; }
   .auth-card { padding: 28px 20px 22px; }
   .topbar h1 { font-size: 17px; }
-  .topbar .btn-ghost:not(.menu-toggle) { display: none; }
+  /* Log out moves into the menu; the bell and help stay in the top bar. */
+  .topbar .btn-ghost:not(.menu-toggle):not(.bell-btn):not(.tour-help) { display: none; }
   .stat-tile b { font-size: 24px; }
+  /* Report rows: the text gets the full width and the status and buttons go underneath it. */
+  .issue-row { grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; padding: 12px; }
+  .issue-row:hover { transform: none; }
+  .issue-row > .issue-status { grid-column: 2; justify-self: start; }
+  .activity-title, .activity-note { white-space: normal; }
+  /* Users table: one card per user. */
+  .users-table, .users-table tbody { display: block; }
+  .users-table .users-head { display: none; }
+  .users-table tr { display: block; padding: 12px 14px; margin-bottom: 10px; border-radius: var(--r); background: var(--card); }
+  .users-table td { display: flex; gap: 12px; padding: 4px 0; border: 0; overflow-wrap: anywhere; }
+  .users-table td:empty { display: none; }
+  .users-table td[data-label]::before { content: attr(data-label); flex: 0 0 64px; color: var(--ink-soft); font-size: 11.5px; font-weight: 700; }
+  .users-table td:first-child { font-weight: 800; font-size: 14.5px; }
+  .users-table td:first-child::before { display: none; }
+  .users-table .users-actions { justify-content: flex-end; padding-top: 8px; }
+  .users-table tbody tr:hover td { background: transparent; }
 }
 
 /* ===== Auto-matched staff suggestion ===== */
@@ -1083,4 +1101,121 @@ button.mix-row { cursor: pointer; }
 @media (max-width: 640px) {
   .mix-body { grid-template-columns: 1fr; gap: 12px; }
   .mix-donut { max-width: 190px; margin: 0 auto; }
+}
+
+/* ===== Clock-in (QR code) ===== */
+/* Technician's on/off duty card at the top of "Assigned to Me". */
+.duty-card { display: flex; align-items: center; gap: 14px; padding: 16px 18px; }
+.duty-card.on { border-color: rgba(63, 217, 160, .35); background: linear-gradient(90deg, var(--good-bg), var(--panel) 60%); }
+.duty-card.off { border-color: rgba(246, 189, 85, .35); background: linear-gradient(90deg, var(--warn-bg), var(--panel) 60%); }
+.duty-dot { flex: 0 0 12px; width: 12px; height: 12px; border-radius: 50%; align-self: flex-start; margin-top: 4px; }
+.duty-card.on .duty-dot { background: var(--good); box-shadow: 0 0 0 5px var(--good-bg); }
+.duty-card.off .duty-dot { background: var(--warn); box-shadow: 0 0 0 5px var(--warn-bg); }
+.duty-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.duty-text b { font-size: 15px; }
+.duty-text > span { color: var(--ink-soft); font-size: 12.5px; }
+.duty-code { display: flex; gap: 8px; margin-top: 8px; max-width: 340px; }
+.duty-code input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(5, 15, 38, .7); color: var(--ink); font-size: 15px; font-weight: 700; letter-spacing: .18em; }
+.duty-code input:focus { outline: none; border-color: var(--mint); box-shadow: 0 0 0 4px rgba(34, 199, 169, .16); }
+.link-btn { align-self: flex-start; padding: 0; margin-top: 6px; border: 0; background: none; color: var(--mint-soft); font-size: 12.5px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Staff manager's Clock-in page. */
+.clockin-grid { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.clockin-qr { text-align: center; }
+.clockin-qr .card-sub { text-align: left; }
+.qr-box { display: grid; place-items: center; width: 100%; max-width: 280px; aspect-ratio: 1; margin: 6px auto 12px; padding: 12px; border-radius: var(--r); background: #fff; color: var(--navy); }
+.qr-box img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.qr-code-text { font-size: 28px; font-weight: 800; letter-spacing: .3em; padding-left: .3em; }
+.clockin-actions { display: flex; justify-content: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.clockin-warning { display: flex; gap: 8px; align-items: flex-start; text-align: left; padding: 10px 12px; margin: 0 0 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); font-size: 12.5px; }
+.clockin-warning svg { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 2px; }
+.duty-list li { gap: 12px; }
+.duty-who { display: flex; flex-direction: column; min-width: 0; }
+.duty-who > span, .duty-times { color: var(--ink-soft); font-size: 12px; }
+.duty-pill { flex: 0 0 auto; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+.duty-pill.on { background: var(--good-bg); color: var(--good); }
+.duty-pill.off { background: var(--slate-bg); color: var(--slate); }
+@media (max-width: 900px) { .clockin-grid { grid-template-columns: minmax(0, 1fr); } .clockin-qr { max-width: 460px; width: 100%; margin-inline: auto; } }
+@media (max-width: 640px) {
+  .duty-card { flex-wrap: wrap; }
+  .duty-text { flex-basis: calc(100% - 26px); }
+  .duty-list li { flex-wrap: wrap; }
+  .duty-times { width: 100%; }
+}
+.duty-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.qr-view { aspect-ratio: 1; object-fit: cover; }
+.timing-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.timing-tag { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.timing-tag.ok { background: var(--good-bg); color: var(--good); }
+.timing-tag.late { background: var(--warn-bg); color: var(--warn); }
+.work-hours { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.work-hours label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.work-hours input { padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(5, 15, 38, .7); color: var(--ink); font-size: 14px; color-scheme: dark; }
+.work-hours input:focus { outline: none; border-color: var(--mint); }
+
+/* ===== Clock-in: breaks, leave, schedules, wall screen, attendance ===== */
+.duty-card.break { border-color: rgba(77, 143, 240, .4); background: linear-gradient(90deg, rgba(77, 143, 240, .14), var(--panel) 60%); }
+.duty-card.break .duty-dot { background: var(--royal-light); box-shadow: 0 0 0 5px rgba(77, 143, 240, .16); }
+.duty-card.leave { border-color: rgba(168, 182, 207, .3); background: linear-gradient(90deg, var(--slate-bg), var(--panel) 60%); }
+.duty-card.leave .duty-dot { background: var(--slate); box-shadow: 0 0 0 5px var(--slate-bg); }
+.duty-hours { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 4px; font-size: 12px; color: var(--ink-faint); }
+.duty-hours svg { width: 13px; height: 13px; }
+.break-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 12.5px; color: var(--ink-soft); }
+.handover-list { list-style: none; margin: 0 0 6px; padding: 0; max-height: 50vh; overflow-y: auto; }
+.handover-list li { border: 1px solid var(--border-soft); border-radius: var(--r-sm); margin-bottom: 8px; }
+.handover-list label { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; cursor: pointer; }
+.handover-list input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--mint); flex: 0 0 18px; }
+.handover-list b { display: block; font-size: 13.5px; }
+.handover-list small { color: var(--ink-soft); font-size: 12px; }
+.urgent-word { color: var(--bad); font-weight: 800; }
+
+.mode-switch { display: inline-flex; padding: 3px; margin: 4px 0 10px; border-radius: 999px; background: rgba(5, 15, 38, .7); border: 1px solid var(--border); }
+.mode-switch button { border: 0; background: none; color: var(--ink-soft); font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 999px; }
+.mode-switch button.on { background: var(--mint); color: var(--navy-deep); }
+.duty-row-end { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.duty-pill.break { background: rgba(77, 143, 240, .16); color: var(--royal-light); }
+.duty-pill.leave { background: var(--warn-bg); color: var(--warn); }
+.timing-tag.info { background: var(--slate-bg); color: var(--slate); }
+
+.hours-editor { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+.day-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.day-chip { min-width: 46px; padding: 7px 10px; border-radius: 999px; border: 1px solid var(--border); background: none; color: var(--ink-soft); font-size: 12.5px; font-weight: 700; }
+.day-chip.on { background: var(--good-bg); border-color: rgba(63, 217, 160, .5); color: var(--good); }
+.schedule-modal { max-height: 90vh; overflow-y: auto; }
+.modal-section { margin: 18px 0 8px; font-size: 13px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.choice { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13.5px; cursor: pointer; }
+.choice input { accent-color: var(--mint); width: 16px; height: 16px; }
+.leave-list li { gap: 10px; }
+.leave-list small { color: var(--ink-soft); }
+.leave-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 10px; }
+.leave-form label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.leave-form label.grow { flex: 1 1 180px; }
+.leave-form input { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: rgba(5, 15, 38, .7); color: var(--ink); font-size: 13.5px; color-scheme: dark; }
+.leave-form input:focus { outline: none; border-color: var(--mint); }
+
+.wall-screen { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 8px; padding: 24px; text-align: center; background: radial-gradient(ellipse at top, #0f2a5c, var(--navy-deep) 70%); overflow-y: auto; }
+.wall-screen h1 { margin: 0; font-size: clamp(26px, 4vw, 44px); }
+.wall-screen p { margin: 0; color: var(--ink-soft); font-size: clamp(14px, 1.8vw, 20px); }
+.wall-close { position: absolute; top: 16px; right: 16px; }
+.wall-time { font-size: 20px; font-weight: 800; color: var(--mint-soft); }
+.wall-qr { width: min(50vh, 82vw); aspect-ratio: 1; padding: 18px; margin-top: 8px; border-radius: 24px; background: #fff; display: grid; place-items: center; color: var(--navy); }
+.wall-qr img { width: 100%; height: 100%; image-rendering: pixelated; }
+.wall-code { font-size: clamp(30px, 5vw, 56px); font-weight: 800; letter-spacing: .3em; padding-left: .3em; }
+.wall-timer { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 14px; }
+.wall-bar { width: min(360px, 70vw); height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.wall-bar span { display: block; height: 100%; background: var(--mint); transition: width 1s linear; }
+.wall-team { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; max-width: 900px; }
+.wall-person { padding: 6px 12px; border-radius: 999px; background: var(--good-bg); color: var(--good); font-size: 13px; font-weight: 700; }
+.wall-person.break { background: rgba(77, 143, 240, .16); color: var(--royal-light); }
+.wall-person.off { background: var(--slate-bg); color: var(--slate); }
+
+.table-scroll { overflow-x: auto; }
+.attendance-table { min-width: 640px; }
+.attendance-table td small { display: block; color: var(--ink-soft); font-size: 11.5px; font-weight: 500; }
+.attendance-table td.bad { color: var(--bad); font-weight: 800; }
+.attendance-table td.warn { color: var(--warn); font-weight: 800; }
+@media (max-width: 640px) {
+  .duty-row-end { width: 100%; justify-content: space-between; }
+  .leave-form label, .leave-form label.grow { flex: 1 1 100%; }
+  .leave-form input { width: 100%; }
 }
