@@ -1,3 +1,5 @@
+import { isAvailable, openShifts } from "../store/duty.js";
+import { listLeave, localDay, onLeaveOn } from "../store/schedules.js";
 import { listIssues } from "../store/issues.js";
 import { listUsers } from "../store/users.js";
 import { DONE_STATUSES, type Issue, type User } from "../types.js";
@@ -18,23 +20,47 @@ export interface StaffWithWorkload {
   name: string;
   specialization: string;
   openJobs: number;
+  // Clocked in with the QR code, and when.
+  onDuty: boolean;
+  onDutySince: string | null;
+  // On a break until breakUntil: clocked in, but no new jobs.
+  onBreak: boolean;
+  breakUntil: string | null;
+  onLeaveToday: boolean;
+  // On duty and not on a break: only these technicians get new jobs automatically.
+  available: boolean;
 }
 
 // Every maintenance staff member with how many unfinished jobs they currently have.
 export async function staffWorkload(): Promise<StaffWithWorkload[]> {
-  const [staff, issues] = await Promise.all([listUsers("maintenance"), listIssues()]);
-  return staff.map((s: User) => ({
-    id: s.id,
-    name: s.name,
-    specialization: s.specialization ?? GENERAL_SPECIALIZATION,
-    openJobs: issues.filter((i) => i.assignedTo === s.id && !DONE_STATUSES.includes(i.status)).length,
-  }));
+  const today = localDay();
+  const [staff, issues, shifts, leave] = await Promise.all([listUsers("maintenance"), listIssues(), openShifts(), listLeave({ from: today, to: today })]);
+  return staff.map((s: User) => {
+    const shift = shifts.get(s.id);
+    const available = isAvailable(shift);
+    return {
+      id: s.id,
+      name: s.name,
+      specialization: s.specialization ?? GENERAL_SPECIALIZATION,
+      openJobs: issues.filter((i) => i.assignedTo === s.id && !DONE_STATUSES.includes(i.status)).length,
+      onDuty: !!shift,
+      onDutySince: shift?.clockInAt ?? null,
+      onBreak: !!shift && !available,
+      breakUntil: shift && !available ? shift.breakUntil : null,
+      onLeaveToday: onLeaveOn(leave, s.id, today),
+      available,
+    };
+  });
 }
 
 // Picks the staff member whose job matches the issue category, preferring whoever has the fewest open jobs.
-// Falls back to general maintenance, then to anyone. Returns undefined only when there is no maintenance staff.
-export async function recommendStaff(issue: Pick<Issue, "category">): Promise<StaffWithWorkload | undefined> {
-  const staff = await staffWorkload();
+// Falls back to general maintenance, then to anyone. People on duty (and not on a break) always come first.
+// With onDutyOnly (automatic assigning), nobody else is picked: undefined means nobody is available.
+// Without it (the staff manager's suggestion), it falls back to everyone when nobody is in.
+export async function recommendStaff(issue: Pick<Issue, "category">, options: { onDutyOnly?: boolean } = {}): Promise<StaffWithWorkload | undefined> {
+  const everyone = await staffWorkload();
+  const onDuty = everyone.filter((s) => s.available);
+  const staff = onDuty.length || options.onDutyOnly ? onDuty : everyone;
   const specialization = CATEGORY_SPECIALIZATION[issue.category] ?? GENERAL_SPECIALIZATION;
   const matching = staff.filter((s) => s.specialization === specialization);
   const general = staff.filter((s) => s.specialization === GENERAL_SPECIALIZATION);

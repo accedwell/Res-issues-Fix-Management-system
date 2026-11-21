@@ -1,9 +1,36 @@
-import type { AppNotification, Category, ChatMessage, Issue, NewIssue, Priority, Role, Setting, SimilarIssue, Staff, Status } from './types'
+import type {
+  AppNotification,
+  AssistantMessage,
+  AssistantReply,
+  AssistantSubmission,
+  Category,
+  ChatMessage,
+  AttendanceRow,
+  ClockCode,
+  DutySchedules,
+  DutyShift,
+  DutyStatus,
+  Leave,
+  Schedule,
+  WorkHours,
+  Issue,
+  NewIssue,
+  Priority,
+  Role,
+  PartInput,
+  Setting,
+  SimilarIssue,
+  SparePart,
+  Staff,
+  Status,
+  StockMovement,
+} from './types'
+import { getToken, saveToken } from './authSession'
+export { getToken, clearToken } from './authSession'
 
 // Backend address. By default it is the same computer the page was opened from, on port 5000,
 // so the app also works from a phone on the same Wi-Fi. Override with VITE_API_URL in a .env file.
 const API_URL = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`
-const TOKEN_KEY = 'resifix-token'
 
 export interface ApiUser {
   id: string
@@ -20,15 +47,6 @@ export interface ApiUser {
 interface AuthResponse {
   token: string
   user: ApiUser
-}
-
-export function getToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY)
-  } catch {
-    // Storage can be blocked (private mode); requests just go without a token.
-    return null
-  }
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -48,22 +66,6 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || 'Something went wrong. Please try again.')
   return data as T
-}
-
-function saveToken(token: string) {
-  try {
-    localStorage.setItem(TOKEN_KEY, token)
-  } catch {
-    // Ignore — the user stays logged in until the page is refreshed.
-  }
-}
-
-export function clearToken() {
-  try {
-    localStorage.removeItem(TOKEN_KEY)
-  } catch {
-    // Nothing to clear.
-  }
 }
 
 export async function apiLogin(email: string, password: string): Promise<ApiUser> {
@@ -148,6 +150,17 @@ export const apiConfirmResolution = (id: string, rating: number | null, comment:
   request('POST', `/issues/${id}/confirm`, { rating, comment })
 export const apiReportNotFixed = (id: string, reason: string) => request('POST', `/issues/${id}/not-fixed`, { reason })
 
+// ===== AI report assistant =====
+
+// Whether the server has the assistant switched on (it needs a Groq key in backend/.env).
+export const fetchAssistantEnabled = async () => (await request<{ enabled: boolean }>('GET', '/assistant')).enabled
+// One turn of the conversation: the messages so far in, the assistant's reply and draft report out.
+export const apiAskAssistant = (messages: AssistantMessage[]) =>
+  request<AssistantReply>('POST', '/assistant/chat', { messages })
+// Files the assistant's report; the server assigns it to the matching maintenance person straight away.
+export const apiSubmitAssistantReport = async (report: AssistantSubmission) =>
+  (await request<{ issue: Issue }>('POST', '/issues/assistant', report)).issue
+
 // The chat on a report. Opening it marks the other person's messages as read.
 export const fetchChat = (id: string) => request<{ messages: ChatMessage[]; canSend: boolean }>('GET', `/issues/${id}/messages`)
 export const apiSendMessage = (id: string, body: string) =>
@@ -182,12 +195,49 @@ export const apiEditCategory = (key: string, name: string, icon: string) =>
 export const apiRemoveCategory = (key: string) => request<{ movedReports: number }>('DELETE', `/categories/${key}`)
 export const apiSetSetting = (key: string, on: boolean) => request('PATCH', `/settings/${key}`, { on })
 
+// ===== Parts store (maintenance staff and the staff manager) =====
+
+export const fetchParts = () => request<{ parts: SparePart[]; movements: StockMovement[] }>('GET', '/parts')
+export const apiTakePart = (id: string, quantity: number, issueId: string, note: string) =>
+  request<{ part: SparePart }>('POST', `/parts/${id}/take`, { quantity, issueId: issueId || undefined, note })
+export const apiRequestPart = (id: string, note: string) => request('POST', `/parts/${id}/request`, { note })
+export const apiRestockPart = (id: string, quantity: number, note: string) =>
+  request<{ part: SparePart }>('POST', `/parts/${id}/restock`, { quantity, note })
+export const apiAddPart = (part: PartInput) => request<{ part: SparePart }>('POST', '/parts', part)
+export const apiEditPart = (id: string, part: PartInput) => request<{ part: SparePart }>('PATCH', `/parts/${id}`, part)
+export const apiRemovePart = (id: string) => request('DELETE', `/parts/${id}`)
+
+// ===== Clock-in (QR code) =====
+
+// Technicians
+export const fetchMyDuty = () => request<DutyStatus>('GET', '/duty/me')
+export const apiClockIn = (code: string) => request<DutyStatus>('POST', '/duty/clock-in', { code })
+// handBack: unfinished jobs to give back to the staff manager when leaving.
+export const apiClockOut = (handBack: string[] = []) => request<DutyStatus>('POST', '/duty/clock-out', { handBack })
+export const apiStartBreak = (minutes: number) => request<DutyStatus>('POST', '/duty/break', { minutes })
+export const apiEndBreak = () => request<DutyStatus>('POST', '/duty/break/end')
+
+// Staff manager
+export const fetchClockInCode = () => request<ClockCode>('GET', '/duty/code')
+export const apiRenewClockInCode = () => request<{ ok: boolean }>('POST', '/duty/code')
+export const apiSetCodeMode = (mode: ClockCode['mode']) => request<{ mode: ClockCode['mode'] }>('PUT', '/duty/mode', { mode })
+export const fetchShiftsToday = async () => (await request<{ shifts: DutyShift[] }>('GET', '/duty/shifts')).shifts
+export const fetchSchedules = () => request<DutySchedules>('GET', '/duty/schedules')
+export const apiSetTeamHours = (hours: WorkHours) => request<{ team: WorkHours }>('PUT', '/duty/hours', hours)
+// null puts them back on the team's hours.
+export const apiSetSchedule = (userId: string, hours: WorkHours | null) =>
+  request<{ schedule: Schedule }>('PUT', `/duty/schedules/${userId}`, hours ?? { useTeam: true })
+export const apiAddLeave = (leave: Omit<Leave, 'id'>) => request<{ leave: Leave }>('POST', '/duty/leave', leave)
+export const apiRemoveLeave = (id: string) => request('DELETE', `/duty/leave/${id}`)
+export const fetchAttendance = (month: string) =>
+  request<{ month: string; rows: AttendanceRow[] }>('GET', `/duty/attendance?month=${encodeURIComponent(month)}`)
+
 // ===== Live updates =====
 
-export type Topic = 'issues' | 'notifications' | 'users' | 'staff' | 'categories' | 'settings'
+export type Topic = 'issues' | 'notifications' | 'users' | 'staff' | 'categories' | 'settings' | 'parts' | 'duty'
 
 const RECONNECT_MS = 3000
-const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings']
+const ALL_TOPICS: Topic[] = ['issues', 'notifications', 'users', 'staff', 'categories', 'settings', 'parts', 'duty']
 
 // Opens the server's live-update stream. Calls onChange with the kinds of data that changed.
 // Voice-call messages ("call" events) are passed to onCall. Returns a function that closes it.

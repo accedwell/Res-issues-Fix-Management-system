@@ -18,9 +18,10 @@ function Users() {
           <Icon name="plus-circle" /> Add user
         </button>
       </div>
-      <table className="simple">
+      {/* On a phone each user becomes a card; data-label names each value there. */}
+      <table className="simple users-table">
         <tbody>
-          <tr>
+          <tr className="users-head">
             <th>Name</th>
             <th>Role</th>
             <th>Email</th>
@@ -29,11 +30,11 @@ function Users() {
           </tr>
           {users.map((user) => (
             <tr key={user.id}>
-              <td>{user.name}</td>
-              <td>{user.role}</td>
-              <td>{user.email}</td>
-              <td>{user.extra}</td>
-              <td>
+              <td data-label="Name">{user.name}</td>
+              <td data-label="Role">{user.role}</td>
+              <td data-label="Email">{user.email}</td>
+              <td data-label="Details">{user.extra}</td>
+              <td className="users-actions">
                 <span style={{ display: 'inline-flex', gap: 6 }}>
                   {/* Only students (block, room) and maintenance staff (job type) have details to correct. */}
                   {(user.kind === 'student' || user.kind === 'maintenance') && (

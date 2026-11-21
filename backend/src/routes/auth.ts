@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { currentUser, requireAuth } from "../middleware/auth.js";
-import { badRequest, HttpError, isDevMode, optionalString, requireEmail, requirePassword, requireString } from "../lib/http.js";
+import { badRequest, HttpError, isDevMode, optionalString, requireEmail, requirePassword, requireRoleEmail, requireString } from "../lib/http.js";
 import { byEmail, rateLimit } from "../lib/rateLimit.js";
 import { createToken, hashPassword, verifyPassword } from "../lib/security.js";
 import { newId } from "../store/db.js";
@@ -23,7 +23,7 @@ authRouter.post("/signup", signupLimit, async (req, res) => {
   const firstName = requireString(body, "firstName", "First name");
   const lastName = requireString(body, "lastName", "Surname");
   const studentNumber = requireString(body, "studentNumber", "Student number");
-  const email = requireEmail(body);
+  const email = requireRoleEmail(body, "student");
   const block = requireString(body, "block", "Block");
   const room = requireString(body, "room", "Room number");
   const password = requirePassword(body);

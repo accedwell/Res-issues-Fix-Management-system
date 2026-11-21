@@ -36,6 +36,104 @@ export interface Staff {
   specialization: string
   // Unfinished jobs, as counted by the server.
   openJobs: number
+  // Clocked in with the QR code, and since when. Only on-duty technicians get new jobs automatically.
+  onDuty: boolean
+  onDutySince: string | null
+  // Clocked in but on a break until breakUntil: no new jobs.
+  onBreak: boolean
+  breakUntil: string | null
+  onLeaveToday: boolean
+  // On duty and not on a break.
+  available: boolean
+}
+
+// When the working day starts and ends, e.g. "07:30" and "16:30", and the weekdays worked
+// (0 = Sunday ... 6 = Saturday). Set by the staff manager.
+export interface WorkHours {
+  start: string
+  end: string
+  days: number[]
+}
+
+// One technician's hours. custom is false when they just follow the team's hours.
+export interface Schedule extends WorkHours {
+  custom: boolean
+}
+
+// Days away; dates are "YYYY-MM-DD", both days included.
+export interface Leave {
+  id: string
+  userId: string
+  startDate: string
+  endDate: string
+  reason: string
+}
+
+// The logged-in technician's own clock-in state.
+export interface DutyStatus {
+  onDuty: boolean
+  since: string | null
+  onBreak: boolean
+  breakUntil: string | null
+  // Forgetting to clock out ends the shift after this many hours.
+  maxHours: number
+  // Break lengths they can pick, in minutes.
+  breakOptions: number[]
+  schedule: Schedule
+  onLeaveToday: boolean
+  // Their leave from today on.
+  leave: Leave[]
+}
+
+// One clock-in today, for the staff manager's list.
+export interface DutyShift {
+  id: string
+  userId: string
+  name: string
+  clockInAt: string
+  clockOutAt: string | null
+  autoClosed: boolean
+  onBreak: boolean
+  breakMinutes: number
+  // Minutes late (0 = on time or early; null on a day they don't normally work).
+  lateMinutes: number | null
+  // Minutes before the end of work they clocked out, when they left early.
+  earlyMinutes: number | null
+}
+
+// The code to show at the office: the printed daily code, or the wall screen's 30-second code.
+export interface ClockCode {
+  mode: 'daily' | 'rotating'
+  code: string
+  day: string
+  // Wall screen only: when the next code appears.
+  changesAt: string | null
+  rotateSeconds: number
+}
+
+// What the staff manager's Clock-in page needs about hours and leave.
+export interface DutySchedules {
+  team: WorkHours
+  today: string
+  people: { userId: string; schedule: Schedule; onLeaveToday: boolean }[]
+  leave: Leave[]
+}
+
+// One technician's month in the attendance report.
+export interface AttendanceRow {
+  userId: string
+  name: string
+  specialization: string
+  scheduledDays: number
+  daysWorked: number
+  missedDays: number
+  leaveDays: number
+  lateDays: number
+  lateMinutes: number
+  earlyLeaves: number
+  forgotClockOut: number
+  hoursWorked: number
+  breakMinutes: number
 }
 
 export interface HistoryEntry {
@@ -68,12 +166,46 @@ export interface Issue {
   // Sent by the server so students can see who is working on their report.
   assignedToName?: string | null
   dateReported: string
+  reportedAt?: string
   photo: boolean
   history: HistoryEntry[]
   feedback: Feedback | null
   reopened?: number
   // Sent by the server when the viewer may see the chat on this report (see Chat.tsx).
   chat?: ChatSummary | null
+  // Only on reports filed with the AI assistant: its notes for maintenance (likely cause, what to bring).
+  assistantNotes?: string
+}
+
+// ===== AI report assistant =====
+
+export interface AssistantMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+// The report the assistant has put together from the conversation so far.
+export interface ReportDraft {
+  title: string
+  category: string
+  priority: Priority
+  room: string
+  description: string
+  maintenanceNotes: string
+}
+
+export interface AssistantReply {
+  reply: string
+  // True once the assistant knows what is wrong and where, so the report can be submitted.
+  ready: boolean
+  draft: ReportDraft
+}
+
+// What the app sends to file the assistant's report. The same submissionId is sent again on a
+// retry, so a double tap or lost connection never files the report twice.
+export interface AssistantSubmission extends ReportDraft {
+  submissionId: string
+  photo?: PhotoUpload
 }
 
 export interface NewIssue {
@@ -117,6 +249,50 @@ export interface User {
   specialization?: string
 }
 
+// A spare part in the maintenance store room.
+export interface SparePart {
+  id: string
+  name: string
+  // Issue category key it is for (e.g. 'electrical'), or '' for general use.
+  category: string
+  unit: string
+  quantity: number
+  // Order more when stock drops to this.
+  minQuantity: number
+  location: string
+  // At or below the order level.
+  low: boolean
+}
+
+// One change to stock: a part taken for a job, or more added by the staff manager.
+export interface StockMovement {
+  id: string
+  partId: string
+  partName: string
+  unit: string
+  type: 'added' | 'taken' | 'restocked'
+  // Positive in, negative out.
+  change: number
+  // How many were left afterwards.
+  balance: number
+  by: string | null
+  issueId: string | null
+  issueRef: string | null
+  note: string
+  at: string
+}
+
+// What the staff manager fills in to add or edit a part.
+export interface PartInput {
+  name: string
+  category: string
+  unit: string
+  minQuantity: number
+  location: string
+  // Starting stock; only used when adding a part.
+  quantity?: number
+}
+
 export interface Setting {
   key: string
   label: string
@@ -154,6 +330,7 @@ export interface NavItem {
 }
 
 export type Modal =
+  | { type: 'overdue' }
   | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed' | 'editReport' | 'cancelReport' | 'chat'; issueId: string }
   | { type: 'addUser' }
   | { type: 'removeUser'; userId: string }
@@ -161,6 +338,8 @@ export type Modal =
   | { type: 'addCategory' }
   | { type: 'editCategory'; categoryKey: string }
   | { type: 'removeCategory'; categoryKey: string }
+  | { type: 'addPart' }
+  | { type: 'takePart' | 'restockPart' | 'editPart' | 'removePart' | 'requestPart'; partId: string }
 
 // Chat on a report between the student and the assigned staff member. Admins can only read it.
 export interface ChatSummary {

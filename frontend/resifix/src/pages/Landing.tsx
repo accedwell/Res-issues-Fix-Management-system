@@ -1,15 +1,18 @@
+import { Logo } from '../components/Logo'
 import { Icon } from '../components/Icon'
 import { useApp } from '../context/appContext'
-import { CATEGORIES } from '../data/constants'
+import { CATEGORIES, isReportableCategory } from '../data/constants'
 
 const STEPS = [
   { icon: 'plus-circle', title: 'Snap & report', text: 'Pick a category, add your room and a photo. Done in under a minute.' },
-  { icon: 'users', title: 'We assign a fixer', text: 'Your residence admin routes it to the right maintenance person.' },
+  { icon: 'users', title: 'We assign a fixer', text: 'It goes straight to the right maintenance person.' },
   { icon: 'bell', title: 'Watch it progress', text: 'Get notified at every stage — received, assigned, in progress.' },
   { icon: 'check-circle', title: 'Fixed & rated', text: 'Confirm the fix and rate the service, or re-open it if it’s not right.' },
 ]
 
 const TICKET_STAGES = ['Submitted', 'Assigned', 'In progress', 'Fixed']
+
+const YEAR = new Date().getFullYear()
 
 export function Landing() {
   const { setRoute } = useApp()
@@ -26,7 +29,7 @@ export function Landing() {
       <header className="topnav">
         <div className="container row">
           <a className="brand" href="#" onClick={(e) => e.preventDefault()}>
-            <span className="mark">RF</span>
+            <span className="mark"><Logo /></span>
             ResiFix
           </a>
           <nav>
@@ -57,9 +60,6 @@ export function Landing() {
         <div className="hero-photo" aria-hidden="true" />
         <div className="container hero-grid">
           <div className="hero-copy">
-            <div className="hero-badge">
-              <span className="pulse" /> Built for university residences
-            </div>
             <h1>
               Something broken in res?
               <span className="accent">Let’s get it fixed.</span>
@@ -122,7 +122,7 @@ export function Landing() {
             <p>Pick from the most common residence problems, or choose “Other” for anything else.</p>
           </div>
           <div className="category-grid">
-            {CATEGORIES.map((c) => (
+            {CATEGORIES.filter(isReportableCategory).map((c) => (
               <button key={c.key} className="category-tile" onClick={() => studentSignup()}>
                 <span className="badge">
                   <Icon name={c.icon} />
@@ -171,10 +171,23 @@ export function Landing() {
       <footer className="site">
         <div className="container">
           <span className="brand">
-            <span className="mark">RF</span>
+            <span className="mark"><Logo /></span>
             ResiFix
           </span>
-          <span>Student Residence Issue Reporting System</span>
+          <nav aria-label="Footer">
+            <a href="#how">How it works</a>
+            <a href="#categories">What to report</a>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault()
+                setRoute('login')
+              }}
+            >
+              Log in
+            </a>
+          </nav>
+          <span>© {YEAR} ResiFix · Student Residence Issue Reporting System</span>
         </div>
       </footer>
     </div>

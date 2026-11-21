@@ -1,14 +1,16 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { CameraCapture } from '../components/CameraCapture'
-import { EmptyState, IssueRow, StatRow } from '../components/common'
+import { EmptyState, IssueRow } from '../components/common'
 import { Icon } from '../components/Icon'
 import { ProgressSteps } from '../components/ProgressSteps'
 import { useApp } from '../context/appContext'
-import { fetchSimilarIssues } from '../api'
-import { canUseWebcam, preparePhoto, type PreparedPhoto } from '../photo'
-import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, OVERDUE_AFTER_DAYS, PRIORITIES, SHARED_PLACES } from '../data/constants'
+import { fetchAssistantEnabled } from '../api'
+import { preparePhoto, type PreparedPhoto } from '../photo'
+import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, PRIORITIES, PRIORITY_HELP, SHARED_PLACES, isReportableCategory } from '../data/constants'
 import { canReportNotFixed, formatDate, isForUser, isOpen, matchesView, stop } from '../utils'
-import type { Issue, Priority, SimilarIssue } from '../types'
+import type { Issue, Priority } from '../types'
+import { AlreadyReported, PhotoButtons } from './reportParts'
+import { ReportAssistant, type AssistantDraft } from './ReportAssistant'
 
 export function StudentDashboard({ tab }: { tab: string }) {
   if (tab === 'report') return <ReportIssue />
@@ -20,15 +22,6 @@ export function StudentDashboard({ tab }: { tab: string }) {
 function useMyIssues() {
   const { issues, auth } = useApp()
   return issues.filter((issue) => issue.studentId === auth.studentId)
-}
-
-// Opens My Reports with one quick view (all, open or done) selected.
-function useShowReports() {
-  const { setFilters, setTab } = useApp()
-  return (view: string) => {
-    setFilters({ ...DEFAULT_FILTERS, view })
-    setTab('reports')
-  }
 }
 
 // Opens the report form, with a category already picked if one is given.
@@ -78,7 +71,6 @@ function WelcomeBanner({ mine }: { mine: Issue[] }) {
 
   return (
     <section className="st-banner">
-      <div className="st-banner-photo" aria-hidden="true" />
       <div className="st-banner-copy">
         <span className="st-banner-eyebrow">
           <span className="pulse" /> {greeting(hour)}
@@ -86,7 +78,7 @@ function WelcomeBanner({ mine }: { mine: Issue[] }) {
         <h1>Hi {firstName}, how is your room?</h1>
         <p>{message}</p>
         <div className="st-banner-cta">
-          <button className="btn btn-primary" onClick={() => startReport()}>
+          <button className="btn btn-primary" onClick={() => startReport()} data-tour="report-cta">
             <Icon name="plus-circle" /> Report an issue
           </button>
         </div>
@@ -121,26 +113,14 @@ function WelcomeBanner({ mine }: { mine: Issue[] }) {
 }
 
 function Overview() {
-  const { notifications, auth, setTab, setModal, categories } = useApp()
-  const showReports = useShowReports()
+  const { setTab, setModal, categories } = useApp()
   const startReport = useStartReport()
   const mine = useMyIssues()
-  const open = mine.filter(isOpen).length
-  const unread = notifications.filter((n) => isForUser(n, auth) && !n.read).length
   const toConfirm = mine.filter((i) => i.status === 'Resolved')
 
   return (
     <div>
       <WelcomeBanner mine={mine} />
-      <StatRow
-        items={[
-          { icon: 'list', value: mine.length, label: 'Total reports', bg: 'var(--slate-bg)', fg: 'var(--blue-deep)', onClick: () => showReports('all') },
-          { icon: 'refresh', value: open, label: 'Currently open', bg: 'var(--warn-bg)', fg: 'var(--warn)', onClick: () => showReports('open') },
-          { icon: 'check-circle', value: mine.length - open, label: 'Resolved / closed', bg: 'var(--good-bg)', fg: 'var(--good)', onClick: () => showReports('done') },
-          { icon: 'bell', value: unread, label: 'Unread notifications', bg: '#e6f7f6', fg: 'var(--teal-deep)', onClick: () => setTab('notifications') },
-        ]}
-      />
-
       {toConfirm.length > 0 && (
         <div className="card st-action-card">
           <div className="card-head">
@@ -168,7 +148,7 @@ function Overview() {
         </div>
       )}
 
-      <div className="card">
+      <div className="card" data-tour="recent-reports">
         <div className="card-head">
           <h2>Recent reports</h2>
           <button className="btn btn-ghost btn-sm" onClick={() => setTab('reports')}>
@@ -186,7 +166,7 @@ function Overview() {
         <h2>What's broken?</h2>
         <p className="card-sub">Tap a category to start a report — it takes under a minute.</p>
         <div className="category-grid st-quick-grid">
-          {categories.map((c) => (
+          {categories.filter(isReportableCategory).map((c) => (
             <button key={c.key} className="category-tile" onClick={() => startReport(c.key)}>
               <span className="badge">
                 <Icon name={c.icon} />
@@ -200,107 +180,12 @@ function Overview() {
   )
 }
 
-// What each priority means, so students can pick the right one.
-const PRIORITY_HELP: Record<Priority, string> = {
-  Low: 'Can wait — small or cosmetic',
-  Normal: 'Annoying, but you can manage',
-  High: 'Affects daily life or study',
-  Urgent: 'Safety risk, flooding, no power',
-}
-
-// While a student fills in the form: open reports of the same kind in the same block, so they can
-// see it is already known before reporting it again. They can still submit if it's a different problem.
-function AlreadyReported({ category, residence, room }: { category: string; residence: string; room: string }) {
-  const { catInfo } = useApp()
-  const [similar, setSimilar] = useState<SimilarIssue[]>([])
-
-  useEffect(() => {
-    if (!category) return
-    let current = true
-    // Wait until the student stops typing the room before asking.
-    const timer = setTimeout(() => {
-      fetchSimilarIssues(category, residence, room)
-        .then((found) => current && setSimilar(found))
-        .catch(() => current && setSimilar([]))
-    }, 400)
-    return () => {
-      current = false
-      clearTimeout(timer)
-    }
-  }, [category, residence, room])
-
-  const shown = category ? similar : []
-  if (!shown.length) return null
-  const inRoom = shown.some((s) => s.sameRoom)
-
-  return (
-    <div className="already-reported" role="status">
-      <b>
-        <Icon name="flag" />
-        {inRoom
-          ? `This may already be reported in ${room.trim()}`
-          : `${plural(shown.length, 'open report', 'open reports')} for ${catInfo(category).name} in ${residence}`}
-      </b>
-      <ul>
-        {shown.map((s) => (
-          <li key={s.ref} className={s.sameRoom ? 'same-room' : ''}>
-            <span>
-              <span className="ref">{s.ref}</span> {s.title}
-              {s.mine && <span className="mine-tag">Your report</span>}
-            </span>
-            <small>
-              {s.room} · reported {formatDate(s.dateReported)} · {s.status}
-            </small>
-          </li>
-        ))}
-      </ul>
-      <p>If it's the same problem, there's no need to report it again — maintenance already knows. If it's a different problem, carry on.</p>
-    </div>
-  )
-}
-
-// "Take a photo" opens the phone camera (or the laptop webcam); "Upload a photo" picks a saved picture.
-function PhotoButtons({
-  onFile,
-  openCamera,
-  disabled = false,
-  small = false,
-}: {
-  onFile: (file: File | undefined) => void
-  openCamera: () => void
-  disabled?: boolean
-  small?: boolean
-}) {
-  const size = small ? ' btn-sm' : ''
-  const pick = (e: ChangeEvent<HTMLInputElement>) => {
-    onFile(e.target.files?.[0])
-    e.target.value = '' // so the same picture can be chosen again after Remove
-  }
-  return (
-    <>
-      {canUseWebcam() ? (
-        <button type="button" className={'btn btn-primary' + size} onClick={openCamera} disabled={disabled}>
-          <Icon name="camera" /> Take a photo
-        </button>
-      ) : (
-        <label className={'btn btn-primary' + size}>
-          <Icon name="camera" /> Take a photo
-          <input type="file" accept="image/*" capture="environment" disabled={disabled} onChange={pick} />
-        </label>
-      )}
-      <label className={'btn btn-ghost' + size}>
-        <Icon name="image" /> Upload a photo
-        <input type="file" accept="image/*" disabled={disabled} onChange={pick} />
-      </label>
-    </>
-  )
-}
-
 function ReportIssue() {
-  const { categories, addIssue, setTab, filters, auth } = useApp()
+  const { categories: allCategories, addIssue, setTab, filters, auth } = useApp()
+  const categories = allCategories.filter(isReportableCategory)
   const preset = categories.some((c) => c.key === filters.category) ? filters.category : ''
   // The block and room from sign-up. The block is fixed; the room can be swapped for a shared
-  // place in the same block (hallway, bathroom...) with "Somewhere else in my block".
+  // place in the same block (hallway, laundry room...) with "Somewhere else in my block".
   const homeBlock = auth.block ?? ''
   const homeRoom = auth.room ?? ''
   const [elsewhere, setElsewhere] = useState(!homeRoom)
@@ -336,6 +221,27 @@ function ReportIssue() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // The AI assistant is offered first when the server has it switched on; the form is always there too.
+  const [assistantOn, setAssistantOn] = useState(false)
+  const [mode, setMode] = useState<'assistant' | 'form'>('assistant')
+  useEffect(() => {
+    let current = true
+    fetchAssistantEnabled()
+      .then((on) => current && setAssistantOn(on))
+      .catch(() => current && setAssistantOn(false))
+    return () => {
+      current = false
+    }
+  }, [])
+  // "Change details" on the assistant's report: carry it into the form to edit by hand.
+  const applyAssistantDraft = (draft: AssistantDraft) => {
+    setForm((f) => ({ ...f, title: draft.title, category: draft.category, priority: draft.priority, room: draft.room, description: draft.description }))
+    setElsewhere(draft.room !== homeRoom)
+    setError('')
+    setMode('form')
+  }
+  const showAssistant = assistantOn && mode === 'assistant'
+
   const field =
     (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [key]: e.target.value }))
@@ -350,10 +256,8 @@ function ReportIssue() {
     if (!(await addIssue({ ...form, photo: photo?.upload }))) setBusy(false)
   }
 
-  const days = OVERDUE_AFTER_DAYS[form.priority]
-
   return (
-    <div className="card st-report">
+    <div className="card st-report" data-tour="report-card">
       <div className="st-report-head">
         <span className="badge">
           <Icon name="plus-circle" />
@@ -361,11 +265,27 @@ function ReportIssue() {
         <div>
           <h2>Report a residence issue</h2>
           <p className="card-sub" style={{ margin: 0 }}>
-            Four quick steps. You'll get a reference number and updates as it's fixed.
+            {showAssistant
+              ? 'Describe it in your own words and the assistant writes the report for you.'
+              : "Four quick steps. You'll get a reference number and updates as it's fixed."}
           </p>
         </div>
       </div>
 
+      {assistantOn && (
+        <div className="st-mode" data-tour="report-mode" role="tablist" aria-label="How to report">
+          <button type="button" role="tab" aria-selected={mode === 'assistant'} className={mode === 'assistant' ? 'active' : ''} onClick={() => setMode('assistant')}>
+            <Icon name="chat" /> Ask the assistant
+          </button>
+          <button type="button" role="tab" aria-selected={mode === 'form'} className={mode === 'form' ? 'active' : ''} onClick={() => setMode('form')}>
+            <Icon name="clipboard" /> Fill in the form
+          </button>
+        </div>
+      )}
+
+      {showAssistant ? (
+        <ReportAssistant onUseForm={applyAssistantDraft} />
+      ) : (
       <form onSubmit={submit}>
         <section className="st-step">
           <h3>
@@ -446,7 +366,7 @@ function ReportIssue() {
           {homeRoom && (
             <label className="st-check">
               <input type="checkbox" checked={elsewhere} onChange={(e) => toggleElsewhere(e.target.checked)} />
-              It's somewhere else in my block (hallway, bathroom, common room…)
+              It's somewhere else in my block (hallway, laundry room…)
             </label>
           )}
           <AlreadyReported category={form.category} residence={form.residence} room={form.room} />
@@ -472,7 +392,7 @@ function ReportIssue() {
             ))}
           </div>
           <p className="field-hint">
-            <Icon name="clock" /> {form.priority} issues are usually sorted within {plural(days, 'day', 'days')}.
+            <Icon name="clock" /> If it is still not fixed after 24 hours, you can send the report again.
           </p>
 
           <div className="field" style={{ marginTop: 14 }}>
@@ -518,6 +438,7 @@ function ReportIssue() {
           </button>
         </div>
       </form>
+      )}
     </div>
   )
 }
@@ -586,16 +507,16 @@ function MyReports() {
                   </button>
                 </span>
               ) : issue.status === 'Submitted' ? (
-                // Until the admin receives it, fixing the report is more useful than chasing it.
-                <button className="btn btn-ghost btn-sm" onClick={stop(() => setModal({ type: 'editReport', issueId: issue.id }))}>
-                  Edit
-                </button>
+                <span style={{ display: 'inline-flex', gap: 6 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={stop(() => setModal({ type: 'editReport', issueId: issue.id }))}>Edit</button>
+                  {canReportNotFixed(issue) && <button className="btn btn-primary btn-sm" onClick={stop(() => setModal({ type: 'notfixed', issueId: issue.id }))}>Send again</button>}
+                </span>
               ) : canReportNotFixed(issue) ? (
                 <button
                   className="btn btn-ghost btn-sm"
                   onClick={stop(() => setModal({ type: 'notfixed', issueId: issue.id }))}
                 >
-                  Still not fixed?
+                  {isOpen(issue) ? 'Send again' : 'Still not fixed?'}
                 </button>
               ) : undefined
             }

@@ -61,8 +61,8 @@ async function main() {
   const users = [
     {
       id: "user-admin",
-      fullName: "ResiFix Administrator",
-      email: "admin@resifix.local",
+      fullName: "ResiFix Staff Manager",
+      email: "admin@resstaff.ac.za",
       role: "ADMIN" as const,
       studentNumber: null,
       blockId: null,
@@ -71,7 +71,7 @@ async function main() {
     {
       id: "user-maintenance-1",
       fullName: "Thabo Maintenance",
-      email: "maintenance1@resifix.local",
+      email: "maintenance1@resstaff.ac.za",
       role: "MAINTENANCE" as const,
       studentNumber: null,
       blockId: null,
@@ -80,7 +80,7 @@ async function main() {
     {
       id: "user-maintenance-2",
       fullName: "Lerato Maintenance",
-      email: "maintenance2@resifix.local",
+      email: "maintenance2@resstaff.ac.za",
       role: "MAINTENANCE" as const,
       studentNumber: null,
       blockId: null,
@@ -89,7 +89,7 @@ async function main() {
     {
       id: "user-student-1",
       fullName: "Student One",
-      email: "student1@resifix.local",
+      email: "student1@resstudent.ac.za",
       role: "STUDENT" as const,
       studentNumber: "RF2026001",
       blockId: "block-a",
@@ -98,7 +98,7 @@ async function main() {
     {
       id: "user-student-2",
       fullName: "Student Two",
-      email: "student2@resifix.local",
+      email: "student2@resstudent.ac.za",
       role: "STUDENT" as const,
       studentNumber: "RF2026002",
       blockId: "block-b",
@@ -348,7 +348,7 @@ async function main() {
     },
     {
       key: "maintenance_email",
-      value: "maintenance@resifix.local",
+      value: "maintenance@resstaff.ac.za",
       description: "Default maintenance contact",
     },
     {

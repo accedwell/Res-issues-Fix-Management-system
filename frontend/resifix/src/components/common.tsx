@@ -1,62 +1,10 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { ChatButton } from './Chat'
 import { Icon } from './Icon'
 import { useApp } from '../context/appContext'
 import { STATUS_CLASS } from '../data/constants'
-import { daysOpen, formatDate, isOverdue, notResolvedReason } from '../utils'
+import { formatDate, notResolvedReason } from '../utils'
 import type { Issue } from '../types'
-
-export interface StatItem {
-  icon: string
-  value: number | string
-  label: string
-  bg: string
-  fg: string
-  // When set, the tile becomes a button that opens the matching list.
-  onClick?: () => void
-}
-
-export function StatRow({ items }: { items: StatItem[] }) {
-  return (
-    <div className="stat-row">
-      {items.map((item) => {
-        const content = (
-          <>
-            <div className="top">
-              <div className="icon-badge">
-                <Icon name={item.icon} />
-              </div>
-              {item.onClick && (
-                <span className="stat-go">
-                  <Icon name="arrow-right" />
-                </span>
-              )}
-            </div>
-            <b>{item.value}</b>
-            <span>{item.label}</span>
-          </>
-        )
-        const style = { '--accent': item.fg } as CSSProperties
-        return item.onClick ? (
-          <button
-            type="button"
-            className="stat-tile stat-tile-link"
-            key={item.label}
-            style={style}
-            onClick={item.onClick}
-            aria-label={`${item.label}: ${item.value}. View list`}
-          >
-            {content}
-          </button>
-        ) : (
-          <div className="stat-tile" key={item.label} style={style}>
-            {content}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 export function EmptyState({ icon, title, sub }: { icon: string; title: string; sub: string }) {
   return (
@@ -73,7 +21,6 @@ export function EmptyState({ icon, title, sub }: { icon: string; title: string; 
 export function IssueRow({ issue, extra }: { issue: Issue; extra?: ReactNode }) {
   const { catInfo, setModal, auth } = useApp()
   const category = catInfo(issue.category)
-  const overdue = isOverdue(issue)
   const notResolved = notResolvedReason(issue)
 
   return (
@@ -86,7 +33,6 @@ export function IssueRow({ issue, extra }: { issue: Issue; extra?: ReactNode }) 
         <div className="title">
           {issue.title}
           {issue.reopened ? <span className="reopened-tag">Re-opened {issue.reopened}×</span> : null}
-          {overdue && <span className="overdue-tag">Overdue · {daysOpen(issue)} days</span>}
         </div>
         <div className="meta">
           {issue.residence} · Room {issue.room} · {formatDate(issue.dateReported)}

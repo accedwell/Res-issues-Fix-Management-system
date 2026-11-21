@@ -88,7 +88,7 @@ export function ForgotPassword() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@campus.ac.za"
+                  placeholder="Your account email address"
                   autoComplete="email"
                   required
                 />

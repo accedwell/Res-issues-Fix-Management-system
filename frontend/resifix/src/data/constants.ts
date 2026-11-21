@@ -14,6 +14,26 @@ export const CATEGORIES: Category[] = [
   { key: 'other', name: 'Other', icon: 'dots' },
 ]
 
+// Each category in everyday words: what the problem actually is. Used where the staff manager reads
+// the mix of reports (Home page chart). Categories added later just show their own name.
+export const CATEGORY_PLAIN: Record<string, string> = {
+  plumbing: 'Leaking taps, pipes and toilets',
+  electrical: 'Plugs, power and stoves not working',
+  furniture: 'Broken beds, chairs and cupboards',
+  cleaning: 'Cleaning supplies running out',
+  wifi: 'Wi-Fi and internet down',
+  security: 'Locks, gates and safety',
+  heating: 'Heating or air-con not working',
+  damage: 'Damaged walls, doors and windows',
+  water: 'No water or no hot water',
+  lighting: 'Lights and bulbs not working',
+  other: 'Other problems',
+}
+
+// Keep historical category labels available while excluding these from report choices.
+export const isReportableCategory = (category: Category) =>
+  !['security', 'heating', 'cat-security', 'cat-hvac'].includes(category.key)
+
 export const CATEGORY_ICONS = [
   'droplet', 'zap', 'armchair', 'spray', 'wifi', 'shield', 'thermometer',
   'building', 'tap', 'bulb', 'dots', 'flag', 'tools', 'layers',
@@ -23,7 +43,7 @@ export const BLOCKS = ['Block A', 'Block B', 'Block C', 'Block D', 'Block E', 'B
 
 // Places in a block that belong to nobody. Besides their own room, students can only pick these,
 // so nobody reports a problem in another student's room. The server checks the same list.
-export const SHARED_PLACES = ['Hallway', 'Bathroom', 'Kitchen', 'Common room', 'Laundry room', 'Stairs / entrance', 'Outside the block']
+export const SHARED_PLACES = ['Hallway', 'Laundry room', 'Study area', 'Elevator (Lift)', 'Stairs / entrance', 'Outside the block']
 
 export const STATUSES: Status[] = ['Submitted', 'Received', 'Assigned', 'In Progress', 'Not Resolved', 'Resolved', 'Closed']
 
@@ -38,6 +58,14 @@ export const STATUS_CLASS: Record<Status, string> = {
 }
 
 export const PRIORITIES: Priority[] = ['Low', 'Normal', 'High', 'Urgent']
+
+// What each priority means, so students can pick the right one.
+export const PRIORITY_HELP: Record<Priority, string> = {
+  Low: 'Can wait — small or cosmetic',
+  Normal: 'Annoying, but you can manage',
+  High: 'Affects daily life or study',
+  Urgent: 'Safety risk, flooding, no power',
+}
 
 export const PRIORITY_CLASS: Record<Priority, string> = {
   Low: 'priority-low',
@@ -64,7 +92,7 @@ export const SPECIALIZATIONS = ['Plumbing', 'Electrical', 'IT / Wi-Fi', GENERAL_
 
 export const ROLE_NAMES: Record<Role, string> = {
   student: 'Student',
-  admin: 'Residence Administrator',
+  admin: 'Staff Manager',
   maintenance: 'Maintenance Staff',
   sysadmin: 'System Administrator',
 }
@@ -78,11 +106,14 @@ export const NAV: Record<Role, NavItem[]> = {
   admin: [
     { key: 'overview', label: 'Home', icon: 'home' },
     { key: 'issues', label: 'All Issues', icon: 'list' },
+    { key: 'parts', label: 'Parts Store', icon: 'box' },
+    { key: 'duty', label: 'Clock-in', icon: 'clock' },
     { key: 'reports', label: 'Reports', icon: 'file-text' },
   ],
   maintenance: [
     { key: 'assigned', label: 'Assigned to Me', icon: 'tools' },
     { key: 'completed', label: 'Completed', icon: 'check-circle' },
+    { key: 'parts', label: 'Parts Store', icon: 'box' },
     { key: 'reports', label: 'My Reports', icon: 'file-text' },
   ],
   sysadmin: [
@@ -94,8 +125,8 @@ export const NAV: Record<Role, NavItem[]> = {
 
 export const PAGE_TITLES: Record<Role, Record<string, string>> = {
   student: { overview: 'Home', report: 'Report an Issue', reports: 'My Reports', notifications: 'Notifications' },
-  admin: { overview: 'Home', issues: 'All Issues', reports: 'Reports' },
-  maintenance: { assigned: 'Assigned to Me', completed: 'Completed Tasks', reports: 'My Reports' },
+  admin: { overview: 'Home', issues: 'All Issues', parts: 'Parts Store', duty: 'Clock-in & Who Is On Duty', reports: 'Reports' },
+  maintenance: { assigned: 'Assigned to Me', completed: 'Completed Tasks', parts: 'Parts Store', reports: 'My Reports' },
   sysadmin: { users: 'Manage Users', categories: 'Manage Categories', settings: 'System Settings' },
 }
 
@@ -117,7 +148,7 @@ export const ISSUE_VIEWS = [
   { key: 'done', label: 'Resolved / closed' },
 ]
 
-// Every report, whatever its priority, is overdue once it is still open after 2 days (same as the server).
-export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 2, High: 2, Normal: 2, Low: 2 }
+// Follow-up is available after 24 elapsed hours, for every priority (same as the server).
+export const OVERDUE_AFTER_DAYS: Record<Priority, number> = { Urgent: 1, High: 1, Normal: 1, Low: 1 }
 
 export const DEFAULT_FILTERS: Filters = { view: 'all', status: 'all', category: 'all', residence: 'all', assignee: 'all', room: '', search: '' }

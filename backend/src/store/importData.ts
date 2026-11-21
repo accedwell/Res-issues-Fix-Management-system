@@ -1,16 +1,21 @@
 import prisma from "../lib/prisma.js";
+import { requireRoleEmail } from "../lib/http.js";
 import { fromDay, historyAction, notificationKind, priorityToDb, roleToDb, statusToDb } from "./mappers.js";
 import type { Data } from "../types.js";
 
 // Replaces everything in the database with the given data (used by `npm run reset-data` and
 // `npm run import-json`). Each list is inserted in its original order.
 export async function loadData(data: Data): Promise<void> {
+  // Validate before replacing any records, including when importing a JSON backup.
+  const users = data.users.map((user) => ({ ...user, email: requireRoleEmail({ email: user.email }, user.role) }));
   const base = Date.now() - 60 * 60 * 1000;
   const inOrder = (i: number) => new Date(base + i * 1000);
 
   await prisma.$transaction(
     async (tx) => {
       await tx.passwordReset.deleteMany();
+      await tx.stockMovement.deleteMany();
+      await tx.sparePart.deleteMany();
       await tx.notification.deleteMany();
       await tx.issueFeedback.deleteMany();
       await tx.issueHistory.deleteMany();
@@ -28,7 +33,7 @@ export async function loadData(data: Data): Promise<void> {
       });
 
       await tx.user.createMany({
-        data: data.users.map((u) => ({
+        data: users.map((u) => ({
           id: u.id,
           fullName: u.name,
           email: u.email.toLowerCase(),
@@ -79,6 +84,31 @@ export async function loadData(data: Data): Promise<void> {
             ...(issue.feedback
               ? { feedback: { create: { userId: issue.studentId, rating: issue.feedback.rating, comment: issue.feedback.comment || null } } }
               : {}),
+          },
+        });
+      }
+
+      // The store room: each part with its current stock, plus any sample uses of it.
+      for (const part of data.parts ?? []) {
+        await tx.sparePart.create({
+          data: {
+            name: part.name,
+            category: part.category || null,
+            unit: part.unit,
+            quantity: part.quantity,
+            minQuantity: part.minQuantity,
+            location: part.location || null,
+            movements: {
+              create: (part.taken ?? []).map((use, i) => ({
+                type: "TAKEN" as const,
+                userId: use.userId,
+                issueId: use.issueId,
+                change: -use.quantity,
+                balance: part.quantity,
+                note: use.note || null,
+                createdAt: fromDay(use.date, i),
+              })),
+            },
           },
         });
       }

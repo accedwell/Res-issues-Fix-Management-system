@@ -37,6 +37,7 @@ function toIssue(row: IssueRow): Issue {
     studentName: row.reporter.fullName,
     assignedTo: row.assigneeId,
     dateReported: toDay(row.reportedAt),
+    reportedAt: row.reportedAt.toISOString(),
     photo: !!row.photo,
     history: row.history.map((h) => ({
       status: (h.newValue as Status) ?? "Submitted",
@@ -46,7 +47,14 @@ function toIssue(row: IssueRow): Issue {
     })),
     feedback: row.feedback ? { rating: row.feedback.rating, comment: row.feedback.comment ?? "" } : null,
     reopened: row.reopenCount,
+    ...assistantNotes(row.systemReport),
   };
+}
+
+// Notes the AI report assistant wrote for maintenance, when the report came from the assistant.
+function assistantNotes(report: Prisma.JsonValue | null): Pick<Issue, "assistantNotes"> {
+  const notes = report && typeof report === "object" && !Array.isArray(report) ? report.maintenanceNotes : undefined;
+  return typeof notes === "string" && notes ? { assistantNotes: notes } : {};
 }
 
 // The database row for one history entry. offsetMs keeps entries from the same day in order.
@@ -54,7 +62,7 @@ const historyRow = (entry: HistoryEntry, offsetMs = 0) => ({
   action: historyAction(entry.status, entry.note),
   newValue: entry.status,
   comment: entry.note,
-  createdAt: fromDay(entry.date, offsetMs),
+  createdAt: entry.at ? new Date(entry.at) : fromDay(entry.date, offsetMs),
 });
 
 // Newest first.
@@ -86,6 +94,17 @@ export async function getIssue(id: string): Promise<Issue | undefined> {
   return row ? toIssue(row) : undefined;
 }
 
+// The report filed from one AI assistant submission, if it was already filed.
+export async function findBySubmission(submissionId: string): Promise<Issue | undefined> {
+  const row = await prisma.maintenanceIssue.findUnique({ where: { chatbotSubmissionId: submissionId }, include: withDetails });
+  return row ? toIssue(row) : undefined;
+}
+
+// Keeps what the AI assistant produced with the report, and the submission id that stops a double submit.
+export async function saveAssistantReport(id: string, report: Prisma.InputJsonObject, submissionId: string): Promise<void> {
+  await prisma.maintenanceIssue.update({ where: { id }, data: { systemReport: report, chatbotSubmissionId: submissionId } });
+}
+
 export async function insertIssue(issue: Issue): Promise<Issue> {
   const block = await prisma.residenceBlock.findUnique({ where: { name: issue.residence } });
   if (!block) throw new Error(`Block ${issue.residence} not found`);
@@ -104,7 +123,7 @@ export async function insertIssue(issue: Issue): Promise<Issue> {
       roomNumber: issue.room,
       hasPhoto: issue.photo,
       reopenCount: issue.reopened,
-      reportedAt: fromDay(issue.dateReported),
+      reportedAt: issue.reportedAt ? new Date(issue.reportedAt) : fromDay(issue.dateReported),
       history: { create: issue.history.map((h, i) => ({ ...historyRow(h, i), userId: issue.studentId })) },
     },
     include: withDetails,

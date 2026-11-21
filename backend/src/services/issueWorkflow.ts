@@ -1,12 +1,14 @@
+import { runAutoAssign } from "../lib/autoAssign.js";
 import { badRequest, forbidden, notFound, today } from "../lib/http.js";
 import { getCategory, OTHER_CATEGORY } from "../store/categories.js";
 import { newId } from "../store/db.js";
 import { deleteIssue, getIssue, insertIssue, listIssues, nextIssueRef, savePhoto, updateIssue, type IssueQuery } from "../store/issues.js";
-import { addNotification, wasNotified } from "../store/notifications.js";
+import { addNotification, addFollowUpNotification } from "../store/notifications.js";
+import { followUpStartedAt, isOverdue, NOT_FIXED_NOTE } from "../lib/issueTiming.js";
 import { isSettingOn } from "../store/settings.js";
 import { getUser, listUsers } from "../store/users.js";
 import { recommendStaff } from "./assignment.js";
-import { DONE_STATUSES, OVERDUE_AFTER_DAYS, type Issue, type Priority, type Status, type User } from "../types.js";
+import { DONE_STATUSES, type Issue, type Priority, type Status, type User } from "../types.js";
 
 // ===== Access rules =====
 
@@ -32,7 +34,7 @@ export async function getIssueFor(user: User, id: string): Promise<Issue> {
 // ===== Helpers =====
 
 function withStatus(issue: Issue, status: Status, note: string): Partial<Issue> {
-  return { status, history: [...issue.history, { status, date: today(), note }] };
+  return { status, history: [...issue.history, { status, date: today(), at: new Date().toISOString(), note }] };
 }
 
 // Key updates (assigned, resolved, re-opened) always reach the student.
@@ -44,6 +46,13 @@ async function notifyStudent(issue: Issue, message: string, important = false) {
 // Every residence administrator gets these (new reports, fixes, re-opened jobs).
 async function notifyAdmins(issue: Issue, message: string) {
   for (const admin of await listUsers("admin")) await addNotification(admin.id, message, issue.id);
+}
+
+// A report that is waiting because nobody has clocked in. Urgent ones can't wait, so the staff
+// manager is told straight away to call someone in. Others go out when the next technician clocks in.
+export async function alertNobodyOnDuty(issue: Issue) {
+  if (issue.priority !== "Urgent") return;
+  await notifyAdmins(issue, `URGENT ${issue.ref} — ${issue.title} is waiting: no technician is on duty. Please call someone in or assign it.`);
 }
 
 async function notifyStaff(issue: Issue, message: string) {
@@ -94,9 +103,12 @@ export interface NewIssueInput {
   photo?: { mimeType: string; data: Buffer };
 }
 
-export async function createIssue(student: User, input: NewIssueInput): Promise<Issue> {
+// After saving, the Python auto-assigner gives the report to a technician in the background.
+// The AI assistant passes autoAssign: false because it assigns the report itself straight away.
+export async function createIssue(student: User, input: NewIssueInput, options: { autoAssign?: boolean } = {}): Promise<Issue> {
   const { photo, ...details } = input;
   const category = (await getCategory(details.category)) ? details.category : OTHER_CATEGORY;
+  const reportedAt = new Date().toISOString();
   const issue: Issue = {
     id: newId("i"),
     ref: await nextIssueRef(),
@@ -108,7 +120,8 @@ export async function createIssue(student: User, input: NewIssueInput): Promise<
     studentName: student.name,
     assignedTo: null,
     dateReported: today(),
-    history: [{ status: "Submitted", date: today(), note: "Report submitted by student." }],
+    reportedAt,
+    history: [{ status: "Submitted", date: today(), at: reportedAt, note: "Report submitted by student." }],
     feedback: null,
     reopened: 0,
   };
@@ -117,6 +130,7 @@ export async function createIssue(student: User, input: NewIssueInput): Promise<
   await notifyStudent(issue, `Your report ${issue.ref} was submitted.`);
   const urgent = issue.priority === "Urgent" ? "URGENT " : "";
   await notifyAdmins(issue, `New ${urgent}report ${issue.ref}: ${issue.title} (${issue.residence}, ${issue.room}).`);
+  if (options.autoAssign !== false) runAutoAssign(issue.id, issue.ref);
   return issue;
 }
 
@@ -156,13 +170,21 @@ export async function receiveIssue(id: string): Promise<Issue> {
   const issue = await getIssue(id);
   if (!issue) throw notFound("Issue not found");
   if (issue.status !== "Submitted") throw badRequest("Only newly submitted reports can be marked as received");
-  const updated = await updateIssue(id, withStatus(issue, "Received", "Reviewed by residence administrator."));
+  const updated = await updateIssue(id, withStatus(issue, "Received", "Reviewed by the staff manager."));
   await notifyStudent(updated, `${issue.ref} was received.`);
   return updated;
 }
 
 // Admin assigns maintenance staff. Without a staffId, the system picks the best match for the job.
-export async function assignIssue(id: string, staffId?: string, priority?: Priority): Promise<Issue> {
+// assignedBy says who did it in the report's history ("by the staff manager" unless the assistant did it).
+// onDutyOnly (automatic assigning) only picks technicians who have clocked in.
+export async function assignIssue(
+  id: string,
+  staffId?: string,
+  priority?: Priority,
+  assignedBy = "by the staff manager",
+  onDutyOnly = false,
+): Promise<Issue> {
   const issue = await getIssue(id);
   if (!issue) throw notFound("Issue not found");
   if (DONE_STATUSES.includes(issue.status)) throw badRequest("This issue is already resolved or closed");
@@ -173,11 +195,13 @@ export async function assignIssue(id: string, staffId?: string, priority?: Prior
     if (!user || user.role !== "maintenance") throw badRequest("That person is not maintenance staff");
     staff = user;
   } else {
-    staff = await recommendStaff(issue);
-    if (!staff) throw badRequest("There is no maintenance staff to assign this to");
+    staff = await recommendStaff(issue, { onDutyOnly });
+    if (!staff) {
+      throw badRequest(onDutyOnly ? "No technician is on duty right now" : "There is no maintenance staff to assign this to");
+    }
   }
 
-  const note = `Assigned to ${staff.name} (${staff.specialization}) by residence administrator.`;
+  const note = `Assigned to ${staff.name} (${staff.specialization}) ${assignedBy}.`;
   const updated = await updateIssue(id, {
     assignedTo: staff.id,
     priority: priority ?? issue.priority,
@@ -185,6 +209,22 @@ export async function assignIssue(id: string, staffId?: string, priority?: Prior
   });
   await notifyStudent(updated, `${issue.ref} has been assigned to ${staff.name}.`, true);
   await notifyStaff(updated, `New job: ${issue.ref} — ${issue.title} (${issue.residence}, ${issue.room}).`);
+  return updated;
+}
+
+// A technician clocking out hands an unfinished job back, so someone still at work can take it.
+// It goes back to Received with nobody assigned, and the staff manager is told.
+export async function handBackJob(user: User, id: string): Promise<Issue> {
+  const issue = await getIssue(id);
+  if (!issue) throw notFound("Issue not found");
+  if (issue.assignedTo !== user.id) throw forbidden("This job is not assigned to you");
+  if (DONE_STATUSES.includes(issue.status)) throw badRequest("This issue is already resolved or closed");
+  const updated = await updateIssue(id, {
+    assignedTo: null,
+    ...withStatus(issue, "Received", `Handed back by ${user.name} when clocking out. Waiting for someone else.`),
+  });
+  const urgent = issue.priority === "Urgent" ? "URGENT " : "";
+  await notifyAdmins(updated, `Handed back: ${user.name} clocked out and handed back ${urgent}${issue.ref} — ${issue.title}. It needs someone else.`);
   return updated;
 }
 
@@ -230,27 +270,17 @@ export async function confirmResolution(student: User, id: string, rating: numbe
   return updated;
 }
 
-// Still open after the time allowed for its priority.
-function isOverdue(issue: Issue): boolean {
-  const days = Math.floor((Date.parse(today()) - Date.parse(issue.dateReported)) / 86_400_000);
-  return !DONE_STATUSES.includes(issue.status) && days > OVERDUE_AFTER_DAYS[issue.priority];
-}
-
-// Marks the overdue alert, so each student gets it only once per report.
-const OVERDUE_ALERT = "is overdue";
-
-// Tells each student, once, when their report is still not fixed after the allowed time, so they
-// can push it again with "Still not fixed". Returns how many alerts were sent.
-export async function alertOverdueReports(): Promise<number> {
+// One reminder per reporting/follow-up period, even if the student logs in several times.
+export async function alertOverdueReports(studentId?: string): Promise<number> {
   let sent = 0;
-  for (const issue of (await listIssues()).filter(isOverdue)) {
-    if (await wasNotified(issue.studentId, issue.id, OVERDUE_ALERT)) continue;
-    await addNotification(
+  for (const issue of (await listIssues({ studentId })).filter((issue) => isOverdue(issue))) {
+    const added = await addFollowUpNotification(
       issue.studentId,
-      `${issue.ref} ${OVERDUE_ALERT} — it was not fixed within ${OVERDUE_AFTER_DAYS[issue.priority]} days. If it is still a problem, open it and tap “Still not fixed” to push it again.`,
       issue.id,
+      followUpStartedAt(issue),
+      `${issue.ref} is not yet fixed after 24 hours. Open the report and choose “Send again” to remind the residence team.`,
     );
-    sent++;
+    if (added) sent++;
   }
   return sent;
 }
@@ -266,14 +296,15 @@ export async function reportNotFixed(student: User, id: string, reason: string):
   if (!canReopen(issue)) throw badRequest("This issue is still being worked on");
 
   // Send it back to maintenance. An overdue job keeps its stage (it may not even be assigned yet).
-  const status = DONE_STATUSES.includes(issue.status) || issue.status === "Not Resolved" ? "In Progress" : issue.status;
+  const status = DONE_STATUSES.includes(issue.status) || issue.status === "Not Resolved"
+    ? (issue.assignedTo ? "In Progress" : "Submitted") : issue.status;
   const updated = await updateIssue(id, {
     reopened: issue.reopened + 1,
     // Clear earlier feedback so the student can rate the new fix.
     feedback: null,
-    ...withStatus(issue, status, "Student reported the issue is NOT fixed: " + reason),
+    ...withStatus(issue, status, NOT_FIXED_NOTE + reason),
   });
-  await notifyStudent(updated, `${issue.ref} was re-opened and sent back to maintenance.`, true);
+  await notifyStudent(updated, `${issue.ref} was re-opened and sent again to the residence team.`, true);
   await notifyStaff(updated, `Re-opened: ${issue.ref} — ${issue.title}. Student says: ${reason}`);
   await notifyAdmins(updated, `Re-opened: ${issue.ref} — ${issue.title}. Student says it is not fixed.`);
   return updated;

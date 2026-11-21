@@ -1,20 +1,22 @@
 # ResiFix backend
 
-Express + TypeScript API. There is no database yet. All data is kept in one JSON file, `backend/data/db.json`. The server creates that file with sample data the first time it starts. The file is git-ignored, so each developer has their own copy.
+Express + TypeScript API with Prisma and PostgreSQL. Configure `DATABASE_URL` and apply the migrations before starting it.
 
 ## Run it
 
 ```bash
 cd backend
 npm install
-cp .env.example .env     # optional, the defaults work locally
+cp .env.example .env     # configure DATABASE_URL and TOKEN_SECRET
+npx prisma generate
+npx prisma migrate deploy
 npm run dev              # http://localhost:5000
 ```
 
 | Script | What it does |
 |---|---|
 | `npm run dev` | Starts the server and restarts it when code changes |
-| `npm run reset-data` | Wipes `data/db.json` and restores the sample data |
+| `npm run reset-data` | Replaces the configured database contents with sample data; use only on a disposable demo database |
 | `npm run typecheck` | Checks the TypeScript types |
 | `npm run build` / `npm start` | Compiles to `dist/` and runs the compiled server |
 
@@ -24,13 +26,17 @@ Every sample account uses the password **`password123`**.
 
 | Role | Email |
 |---|---|
-| Student | `naledi.m@campus.ac.za`, `karabo.s@campus.ac.za` |
-| Residence admin | `p.mokgadi@campus.ac.za` |
-| Maintenance (Plumbing) | `t.nkosi@campus.ac.za` |
-| Maintenance (Electrical) | `l.mokoena@campus.ac.za` |
-| Maintenance (General) | `s.dlamini@campus.ac.za` |
-| Maintenance (IT / Wi-Fi) | `a.khumalo@campus.ac.za` |
-| System admin | `sysadmin@campus.ac.za` |
+| Student | `naledi@resStudent.ac.za`, `karabo.s@resStudent.ac.za` |
+| Staff manager | `mokgadi@resStaff.ac.za` |
+| Maintenance (Plumbing) | `t.nkosi@resStaff.ac.za` |
+| Maintenance (Electrical) | `l.mokoena@resStaff.ac.za` |
+| Maintenance (General) | `s.dlamini@resStaff.ac.za` |
+| Maintenance (IT / Wi-Fi) | `a.khumalo@resStaff.ac.za` |
+| System admin | `sysadmin@resStaff.ac.za` |
+
+Students must use `@resStudent.ac.za`. Staff managers, maintenance staff and system administrators must use `@resStaff.ac.za`. Addresses are stored in lowercase and accepted case-insensitively.
+
+After configuring the intended local database, `npm run migrate:email-domains` updates existing active accounts to these domains while keeping account IDs, passwords and report ownership. The script runs in a transaction and stops if an address conflicts with an existing account.
 
 ## How the code is organised
 

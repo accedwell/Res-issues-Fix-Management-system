@@ -41,11 +41,11 @@ export function fromDay(day: string, offsetMs = 0): Date {
 
 // History rows record what kind of change it was, for reports.
 export function historyAction(status: Status, note: string): HistoryAction {
+  if (/not fixed/i.test(note)) return "REOPENED";
   if (status === "Submitted") return "CREATED";
   if (status === "Assigned") return "ASSIGNED";
   if (status === "Resolved") return "RESOLVED";
   if (status === "Closed") return "CLOSED";
-  if (/not fixed/i.test(note)) return "REOPENED";
   return "STATUS_CHANGED";
 }
 
@@ -53,9 +53,21 @@ export function historyAction(status: Status, note: string): HistoryAction {
 export function notificationKind(message: string): { type: NotificationType; title: string } {
   // First, because chat text can contain any of the words matched below.
   if (/^New message/i.test(message)) return { type: "COMMENT_ADDED", title: "New message" };
+  if (/^Clocked in:/i.test(message)) return { type: "SYSTEM", title: "Clocked in" };
+  if (/^Clocked out:/i.test(message)) return { type: "SYSTEM", title: "Clocked out" };
+  if (/^Not clocked in:/i.test(message)) return { type: "SYSTEM", title: "Not clocked in" };
+  if (/^On break:/i.test(message)) return { type: "SYSTEM", title: "On break" };
+  if (/^Back from break:/i.test(message)) return { type: "SYSTEM", title: "Back from break" };
+  if (/^Handed back:/i.test(message)) return { type: "STATUS_UPDATED", title: "Job handed back" };
+  if (/^Leave recorded/i.test(message)) return { type: "SYSTEM", title: "Leave" };
+  if (/^Your work hours/i.test(message)) return { type: "SYSTEM", title: "Work hours" };
+  if (/^Out of stock/i.test(message)) return { type: "SYSTEM", title: "Out of stock" };
+  if (/^Low stock/i.test(message)) return { type: "SYSTEM", title: "Low stock" };
+  if (/^Restock request/i.test(message)) return { type: "SYSTEM", title: "Restock request" };
   if (/^Missed call/i.test(message)) return { type: "COMMENT_ADDED", title: "Missed call" };
   if (/^New job/i.test(message)) return { type: "ISSUE_ASSIGNED", title: "New job" };
   if (/^New .*report/i.test(message)) return { type: "ISSUE_CREATED", title: "New report" };
+  if (/not yet fixed after 24 hours/i.test(message)) return { type: "STATUS_UPDATED", title: "Issue not yet fixed" };
   if (/re-opened/i.test(message)) return { type: "STATUS_UPDATED", title: "Report re-opened" };
   if (/confirmed fixed/i.test(message)) return { type: "ISSUE_CLOSED", title: "Fix confirmed" };
   if (/not resolved|could not be resolved/i.test(message)) return { type: "STATUS_UPDATED", title: "Not resolved" };

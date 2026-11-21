@@ -61,3 +61,16 @@ export function downloadIssuesCsv(issues: Issue[], catInfo: (key: string) => Cat
   link.remove()
   URL.revokeObjectURL(url)
 }
+
+// Any table (header row first) as a CSV download, e.g. the attendance report.
+export function downloadTableCsv(rows: (string | number)[][], name: string) {
+  const text = '\ufeff' + rows.map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n'
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${name}.csv`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
