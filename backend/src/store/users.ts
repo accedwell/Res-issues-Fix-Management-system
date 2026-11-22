@@ -1,6 +1,6 @@
 import prisma from "../lib/prisma.js";
 import { roleFromDb, roleToDb } from "./mappers.js";
-import type { Prisma } from "../generated/prisma/client.js";
+import type { Prisma } from "../generated-prisma/client.js";
 import type { PublicUser, Role, User } from "../types.js";
 
 const withBlock = { block: true } as const;

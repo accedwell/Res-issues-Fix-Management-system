@@ -148,6 +148,34 @@ export const apiConfirmResolution = (id: string, rating: number | null, comment:
   request('POST', `/issues/${id}/confirm`, { rating, comment })
 export const apiReportNotFixed = (id: string, reason: string) => request('POST', `/issues/${id}/not-fixed`, { reason })
 
+// ===== AI maintenance assistant =====
+
+export interface AssistantDraft {
+  title?: string
+  description?: string
+  category?: string
+  residence?: string
+  room?: string
+  priority?: Priority
+}
+
+export interface AssistantStaff {
+  id: string
+  name: string
+  specialization: string
+}
+
+export interface AssistantReply {
+  reply: string
+  draft: AssistantDraft
+  ready: boolean
+  staff?: AssistantStaff
+  issue?: Issue
+}
+
+export const apiChat = (message: string, draft: AssistantDraft, confirm = false) =>
+  request<AssistantReply>('POST', '/chat', { message, draft, confirm })
+
 // The chat on a report. Opening it marks the other person's messages as read.
 export const fetchChat = (id: string) => request<{ messages: ChatMessage[]; canSend: boolean }>('GET', `/issues/${id}/messages`)
 export const apiSendMessage = (id: string, body: string) =>

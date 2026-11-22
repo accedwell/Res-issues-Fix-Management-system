@@ -1,50 +1,37 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Icon } from './Icon'
 import { useApp } from '../context/appContext'
-import {
-  draftSummary,
-  isAffirmative,
-  isNegative,
-  mergeDraft,
-  nextQuestion,
-  toNewIssue,
-  type ChatDraft,
-  type ChatMessage,
-} from '../chatbot'
-import { recommendStaff } from '../utils'
+import { apiChat, type AssistantDraft } from '../api'
 
 let messageSeq = 0
 
-const makeMessage = (role: ChatMessage['role'], text: string): ChatMessage => ({
+interface Bubble {
+  id: string
+  role: 'assistant' | 'user'
+  text: string
+}
+
+const makeMessage = (role: Bubble['role'], text: string): Bubble => ({
   id: `chat-${Date.now()}-${messageSeq++}`,
   role,
   text,
-  date: new Date().toISOString(),
 })
 
 const WELCOME =
-  "Hi! I'm ResiFix AI, your maintenance assistant. Tell me what is broken and where — for example: 'The tap in Block B room 204 is leaking badly.' I'll log the report and assign the best maintenance staff member automatically."
+  "Hi! I'm ResiFix AI, your maintenance assistant. Tell me what is broken and where — for example: 'The tap in my room is leaking badly.' I'll log the report and assign the best maintenance staff member automatically."
 
 type Stage = 'chat' | 'confirm' | 'done'
 
 export function ChatBot() {
-  const { auth, issues, chatReportIssue } = useApp()
+  const { auth, refreshIssues } = useApp()
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [draft, setDraft] = useState<ChatDraft>({})
+  const [messages, setMessages] = useState<Bubble[]>([])
+  const [draft, setDraft] = useState<AssistantDraft>({})
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const [stage, setStage] = useState<Stage>('chat')
   const bodyRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const timerRef = useRef<number | undefined>(undefined)
-
-  useEffect(
-    () => () => {
-      if (timerRef.current !== undefined) window.clearTimeout(timerRef.current)
-    },
-    [],
-  )
 
   useEffect(() => {
     if (open) bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: 'smooth' })
@@ -66,7 +53,13 @@ export function ChatBot() {
     window.setTimeout(() => inputRef.current?.focus(), 50)
   }
 
-  const respond = (text: string) => {
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    const text = input.trim()
+    if (!text || thinking) return
+
+    setInput('')
+
     if (stage === 'done') {
       if (/new|another|report|issue/i.test(text)) {
         reset()
@@ -79,91 +72,21 @@ export function ChatBot() {
       return
     }
 
-    if (stage === 'confirm') {
-      if (isNegative(text)) {
-        setDraft({})
-        setStage('chat')
-        setMessages((prev) => [
-          ...prev,
-          makeMessage('assistant', 'No problem — nothing was submitted. Tell me what needs fixing.'),
-        ])
-        return
-      }
-
-      if (isAffirmative(text)) {
-        const newIssue = toNewIssue(draft)
-        if (!newIssue) {
-          setStage('chat')
-          setMessages((prev) => [...prev, makeMessage('assistant', nextQuestion(draft))])
-          return
-        }
-
-        const { issue, staff } = chatReportIssue(newIssue)
-        setStage('done')
-        setMessages((prev) => [
-          ...prev,
-          makeMessage(
-            'assistant',
-            `Done! ✅\n\nYour report ${issue.ref} has been logged and assigned to ${staff.name} (${staff.specialization}). ${staff.name} has been notified and will take it from here.\n\nYou can follow the progress under My Reports.`,
-          ),
-        ])
-        return
-      }
-
-      // The student added more detail instead of saying yes/no. Merge it and ask again.
-      const merged = mergeDraft(draft, text)
-      setDraft(merged)
-      const newIssue = toNewIssue(merged)
-      if (!newIssue) {
-        setStage('chat')
-        setMessages((prev) => [...prev, makeMessage('assistant', nextQuestion(merged))])
-        return
-      }
-      const staff = recommendStaff({ category: merged.category ?? 'other' }, issues)
-      setMessages((prev) => [
-        ...prev,
-        makeMessage(
-          'assistant',
-          `${draftSummary(merged, staff.name, staff.specialization)}\n\nShall I submit this report and assign ${staff.name}? Reply yes to confirm.`,
-        ),
-      ])
-      return
-    }
-
-    const merged = mergeDraft(draft, text)
-    setDraft(merged)
-    const newIssue = toNewIssue(merged)
-
-    if (newIssue) {
-      const staff = recommendStaff({ category: merged.category ?? 'other' }, issues)
-      setStage('confirm')
-      setMessages((prev) => [
-        ...prev,
-        makeMessage(
-          'assistant',
-          `${draftSummary(merged, staff.name, staff.specialization)}\n\nShall I submit this report and assign ${staff.name}? Reply yes to confirm.`,
-        ),
-      ])
-    } else {
-      setMessages((prev) => [...prev, makeMessage('assistant', nextQuestion(merged))])
-    }
-  }
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    const text = input.trim()
-    if (!text || thinking) return
-
-    setInput('')
     setMessages((prev) => [...prev, makeMessage('user', text)])
     setThinking(true)
-    timerRef.current = window.setTimeout(() => {
-      try {
-        respond(text)
-      } finally {
-        setThinking(false)
-      }
-    }, 550)
+    try {
+      const result = await apiChat(text, draft, stage === 'confirm')
+      setDraft(result.draft)
+      setMessages((prev) => [...prev, makeMessage('assistant', result.reply)])
+      setStage(result.issue ? 'done' : result.ready ? 'confirm' : 'chat')
+      // The report was created and assigned on the server, so reload the lists.
+      if (result.issue) refreshIssues()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
+      setMessages((prev) => [...prev, makeMessage('assistant', `Sorry — ${message}`)])
+    } finally {
+      setThinking(false)
+    }
   }
 
   return (

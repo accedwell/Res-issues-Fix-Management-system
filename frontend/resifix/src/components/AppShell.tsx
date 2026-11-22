@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CallManager } from './CallManager'
+import { ChatBot } from './ChatBot'
 import { Icon } from './Icon'
 import { ModalHost } from './Modals'
 import { NotificationBell } from './NotificationBell'
@@ -102,6 +103,8 @@ export function AppShell() {
         </div>
       </div>
       <ModalHost />
+      {/* Students can report a problem conversationally from any page. */}
+      {role === 'student' && <ChatBot />}
       {/* Voice calls work on any page, so an incoming call can ring wherever the person is. */}
       {(role === 'student' || role === 'maintenance') && <CallManager />}
       {toast && (

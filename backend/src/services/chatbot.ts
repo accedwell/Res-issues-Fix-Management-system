@@ -2,7 +2,7 @@ import { badRequest } from "../lib/http.js";
 import { listCategories } from "../store/categories.js";
 import { listBlocks } from "../store/settings.js";
 import { getUser } from "../store/users.js";
-import { PRIORITIES, type Issue, type Priority, type User } from "../types.js";
+import { PRIORITIES, SHARED_PLACES, type Issue, type Priority, type User } from "../types.js";
 import { recommendStaff, type StaffWithWorkload } from "./assignment.js";
 import { assignIssue, createIssue } from "./issueWorkflow.js";
 
@@ -243,6 +243,27 @@ export async function chatTurn(student: User, request: ChatRequest): Promise<Cha
 
   if (!yes && !no) draft = mergeDraft(draft, message, blocks);
 
+  // Same rule as the report form: a student reports their own room or a shared place in their
+  // own block, never another room or block.
+  let locationNote = "";
+  if (student.block && draft.residence !== student.block) {
+    if (draft.residence) {
+      locationNote = `You are registered in ${student.block}, so I can only log reports for ${student.block}. `;
+    }
+    draft.residence = student.block;
+  }
+  const room = draft.room?.trim().toLowerCase() ?? "";
+  const ownRoom = student.room?.trim().toLowerCase() ?? "";
+  const sharedPlace = SHARED_PLACES.some((place) => place.toLowerCase() === room);
+  if (room && !sharedPlace && room !== ownRoom) {
+    const places = `your own room${student.room ? ` (${student.room})` : ""} or a shared area (${SHARED_PLACES.slice(0, 4).join(", ")})`;
+    return {
+      reply: locationNote ? `${locationNote}Which is it: ${places}?` : `I can only log reports for ${places}. Which one is it?`,
+      draft: { ...draft, room: undefined },
+      ready: false,
+    };
+  }
+
   const categoryKey = draft.category ?? "other";
   const categoryLabel = categories.find((category) => category.key === categoryKey)?.name ?? "Other";
   const ready = isReady(draft);
@@ -256,7 +277,6 @@ export async function chatTurn(student: User, request: ChatRequest): Promise<Cha
       residence: draft.residence ?? "",
       room: draft.room ?? "",
       description: draft.description ?? "",
-      photo: false,
     });
 
     try {
@@ -273,7 +293,7 @@ export async function chatTurn(student: User, request: ChatRequest): Promise<Cha
       return {
         reply: `Done! Your report ${assigned.ref} has been logged and assigned to ${staff?.name ?? "the maintenance team"}${
           staff ? ` (${staff.specialization})` : ""
-        }. You can track it under My Reports.`,
+        }. You can follow its progress on your Home page under Recent reports.`,
         draft,
         ready: true,
         staff,

@@ -1,6 +1,6 @@
 import prisma from "../lib/prisma.js";
 import { fromDay, historyAction, priorityFromDb, priorityToDb, statusFromDb, statusToDb, toDay } from "./mappers.js";
-import type { Prisma } from "../generated/prisma/client.js";
+import type { Prisma } from "../generated-prisma/client.js";
 import type { HistoryEntry, Issue, Status } from "../types.js";
 
 export interface IssueQuery {

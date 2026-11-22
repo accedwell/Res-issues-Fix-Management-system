@@ -1,4 +1,4 @@
-import type { HistoryAction, IssuePriority, IssueStatus, NotificationType, UserRole } from "../generated/prisma/client.js";
+import type { HistoryAction, IssuePriority, IssueStatus, NotificationType, UserRole } from "../generated-prisma/client.js";
 import type { Priority, Role, Status } from "../types.js";
 
 // The app and the database name some values differently. These tables translate both ways.
