@@ -25,13 +25,37 @@ export function customPeriod(from: string, to: string): Period {
   return { from, to, label: `${formatDate(from)} – ${formatDate(to)}`, slug: `${from}_to_${to}` }
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// The Monday-to-Sunday week that contains the given day (YYYY-MM-DD).
+export function weekPeriod(day: string): Period {
+  const t = Date.parse(day)
+  const weekday = (new Date(t).getUTCDay() + 6) % 7 // Monday = 0
+  const monday = new Date(t - weekday * DAY_MS)
+  const sunday = new Date(monday.getTime() + 6 * DAY_MS)
+  const from = monday.toISOString().slice(0, 10)
+  const to = sunday.toISOString().slice(0, 10)
+  const short = (d: Date) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' })
+  return {
+    from,
+    to,
+    label: `${short(monday)} – ${short(sunday)} ${sunday.getUTCFullYear()}`,
+    slug: `week-${from}`,
+  }
+}
+
 const inPeriod = (date: string, p: Period) => !!date && date >= p.from && date <= p.to
 
 // The issues reported during the period.
 export const issuesInPeriod = (issues: Issue[], p: Period) => issues.filter((i) => inPeriod(i.dateReported, p))
 
 // When an issue was fixed: the last time it was marked resolved, or closed if that came first.
-const fixedOn = (i: Issue) => lastDate(i, 'Resolved') || lastDate(i, 'Closed')
+export function fixedOn(i: Issue): string {
+  return lastDate(i, 'Resolved') || lastDate(i, 'Closed')
+}
+
+// Issues that were fixed during the period, whenever they were reported.
+export const fixedInPeriod = (issues: Issue[], p: Period) => issues.filter((i) => inPeriod(fixedOn(i), p))
 
 const escape = (text: string | number) =>
   String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)
@@ -48,11 +72,20 @@ function countTable(title: string, heading: string, rows: [string, number][]): s
     .join('')}</tbody></table></section>`
 }
 
+// Categories with how many were reported and fixed in the period, skipping empty rows.
+function categoryTable(rows: [string, number, number][]): string {
+  const shown = rows.filter(([, reported, fixed]) => reported > 0 || fixed > 0)
+  if (!shown.length) return ''
+  return `<section><h2>By category</h2><table><thead><tr><th>Category</th><th class="num">Reported</th><th class="num">Fixed</th></tr></thead><tbody>${shown
+    .map(([label, reported, fixed]) => `<tr><td>${escape(label)}</td><td class="num">${reported}</td><td class="num">${fixed}</td></tr>`)
+    .join('')}</tbody></table></section>`
+}
+
 // "scope" describes a search the issues were narrowed by (e.g. "Block A · Plumbing"), or is empty.
 export function buildReportHtml(all: Issue[], p: Period, catInfo: (key: string) => Category, preparedBy: string, scope = ''): string {
   const issues = issuesInPeriod(all, p).sort((a, b) => a.dateReported.localeCompare(b.dateReported))
   // Fixed during the period, whenever they were reported.
-  const fixed = all.filter((i) => inPeriod(fixedOn(i), p))
+  const fixed = fixedInPeriod(all, p).sort((a, b) => fixedOn(a).localeCompare(fixedOn(b)))
   const ratings = issues.flatMap((i) => (i.feedback?.rating != null ? [i.feedback.rating] : []))
 
   const summary: [string, string | number][] = [
@@ -65,11 +98,16 @@ export function buildReportHtml(all: Issue[], p: Period, catInfo: (key: string) 
     ['Average rating', ratings.length ? `${oneDecimal(average(ratings))} / 5` : 'No ratings'],
   ]
 
-  const categoryRows = new Map<string, number>()
-  for (const i of issues) {
-    const name = catInfo(i.category).name
-    categoryRows.set(name, (categoryRows.get(name) ?? 0) + 1)
+  // Reports and fixes per category. Fixes are counted in the period they were fixed.
+  const categoryRows = new Map<string, { reported: number; fixed: number }>()
+  const addCategory = (key: string, field: 'reported' | 'fixed') => {
+    const name = catInfo(key).name
+    const row = categoryRows.get(name) ?? { reported: 0, fixed: 0 }
+    row[field]++
+    categoryRows.set(name, row)
   }
+  for (const i of issues) addCategory(i.category, 'reported')
+  for (const i of fixed) addCategory(i.category, 'fixed')
 
   // Per maintenance person: jobs from this period, how many they finished, and their rating.
   const staff = new Map<string, Issue[]>()
@@ -94,6 +132,17 @@ export function buildReportHtml(all: Issue[], p: Period, catInfo: (key: string) 
         <td>${escape(i.status)}${isOverdue(i) ? ' <b>(overdue)</b>' : ''}</td>
         <td>${escape(formatDate(i.dateReported))}</td><td>${escape(i.assignedToName ?? '—')}</td>
         <td class="num">${daysTaken(i)}</td></tr>`,
+    )
+    .join('')
+
+  // Issues fixed during the period, with the date they were fixed and how long they took.
+  const fixedRows = fixed
+    .map(
+      (i) => `<tr>
+        <td>${escape(i.ref)}</td><td>${escape(i.title)}</td><td>${escape(catInfo(i.category).name)}</td>
+        <td>${escape(i.residence)}, ${escape(i.room)}</td><td>${escape(fixedOn(i) ? formatDate(fixedOn(i)) : '—')}</td>
+        <td>${escape(i.assignedToName ?? '—')}</td><td class="num">${daysTaken(i)}</td>
+        <td class="num">${i.feedback?.rating != null ? `${i.feedback.rating} ★` : '—'}</td></tr>`,
     )
     .join('')
 
@@ -146,15 +195,16 @@ export function buildReportHtml(all: Issue[], p: Period, catInfo: (key: string) 
   </header>
   <section><h2>Summary</h2><div class="stats">${summary.map(([label, value]) => `<div class="stat"><b>${escape(value)}</b><span>${escape(label)}</span></div>`).join('')}</div></section>
   ${
-    issues.length
+    issues.length || fixed.length
       ? `<div class="two">
-    ${countTable('By category', 'Category', [...categoryRows.entries()].sort((a, b) => b[1] - a[1]))}
+    ${categoryTable([...categoryRows.entries()].sort((a, b) => b[1].reported - a[1].reported || b[1].fixed - a[1].fixed).map(([name, r]) => [name, r.reported, r.fixed] as [string, number, number]))}
     ${countTable('By block', 'Block', BLOCKS.map((b) => [b, issues.filter((i) => i.residence === b).length]))}
     ${countTable('By status (now)', 'Status', STATUSES.map((s) => [s, issues.filter((i) => i.status === s).length]))}
   </div>
+  ${fixed.length ? `<section class="wide"><h2>Fixed in this period (${fixed.length})</h2><table><thead><tr><th>Ref</th><th>Title</th><th>Category</th><th>Location</th><th>Fixed on</th><th>Assigned to</th><th class="num">Days</th><th class="num">Rating</th></tr></thead><tbody>${fixedRows}</tbody></table></section>` : ''}
   <section class="wide"><h2>Maintenance staff</h2><table><thead><tr><th>Staff member</th><th class="num">Jobs</th><th class="num">Finished</th><th class="num">Avg days to fix</th><th class="num">Avg rating</th></tr></thead><tbody>${staffRows}</tbody></table></section>
-  <section class="wide"><h2>All issues reported (${issues.length})</h2><table><thead><tr><th>Ref</th><th>Title</th><th>Category</th><th>Location</th><th>Priority</th><th>Status</th><th>Reported</th><th>Assigned to</th><th class="num">Days</th></tr></thead><tbody>${issueRows}</tbody></table></section>`
-      : `<p class="empty">No issues were reported in this period.</p>`
+  ${issues.length ? `<section class="wide"><h2>All issues reported (${issues.length})</h2><table><thead><tr><th>Ref</th><th>Title</th><th>Category</th><th>Location</th><th>Priority</th><th>Status</th><th>Reported</th><th>Assigned to</th><th class="num">Days</th></tr></thead><tbody>${issueRows}</tbody></table></section>` : ''}`
+      : `<p class="empty">No issues were reported or fixed in this period.</p>`
   }
   <footer>"Days" is days open so far, or days it took to fix for finished issues. Overdue rows are highlighted.</footer>
 </div>
@@ -169,4 +219,16 @@ export function openReport(html: string, print = false): boolean {
   // The tab keeps its copy; free the link once it has loaded.
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
   return !!tab
+}
+
+// Saves the report as a standalone document the admin can keep, print or open later.
+export function downloadReportHtml(html: string, name: string) {
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${name}.html`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }

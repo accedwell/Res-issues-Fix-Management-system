@@ -6,7 +6,17 @@ import { Icon } from '../components/Icon'
 import { TrendChart } from '../components/TrendChart'
 import { useApp } from '../context/appContext'
 import { downloadIssuesCsv } from '../exportCsv'
-import { buildReportHtml, customPeriod, issuesInPeriod, monthPeriod, openReport } from '../periodReport'
+import {
+  buildReportHtml,
+  customPeriod,
+  downloadReportHtml,
+  fixedInPeriod,
+  fixedOn,
+  issuesInPeriod,
+  monthPeriod,
+  openReport,
+  weekPeriod,
+} from '../periodReport'
 import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, STATUSES } from '../data/constants'
 import { daysOpen, formatDate, initials, isOpen, isOverdue, lastReopen, matchesView, sameRoom, stop } from '../utils'
 import type { Filters, Issue } from '../types'
@@ -595,74 +605,249 @@ function reportMonths(issues: Issue[], current: string): string[] {
   return months
 }
 
-// Pick a month (or your own dates), then view the report, save it as a PDF or download the issues as a spreadsheet.
-// "scope" describes any search on the Reports page, so the report says what it covers.
+// Every Monday from the first report until the current week, newest first.
+function reportWeeks(issues: Issue[], today: string): string[] {
+  const first = issues.reduce((min, i) => (i.dateReported < min ? i.dateReported : min), today)
+  const firstWeek = weekPeriod(first).from
+  const thisWeek = weekPeriod(today).from
+  const weeks: string[] = []
+  for (let d = new Date(firstWeek + 'T00:00:00Z'); d.toISOString().slice(0, 10) <= thisWeek; d.setUTCDate(d.getUTCDate() + 7)) {
+    weeks.unshift(d.toISOString().slice(0, 10))
+  }
+  if (!weeks.includes(thisWeek)) weeks.unshift(thisWeek)
+  return weeks
+}
+
+type PeriodUnit = 'week' | 'month' | 'custom'
+
+// Pick a week, a month (or your own dates), then view the issues by category, see what was fixed
+// and download the report, the fixed issues or the spreadsheet. "scope" describes any search on the
+// Reports page, so the report says what it covers.
 function PeriodReport({ issues, scope }: { issues: Issue[]; scope: string }) {
-  const { catInfo, auth } = useApp()
+  const { catInfo, auth, setModal } = useApp()
   const [today] = useState(() => new Date().toISOString().slice(0, 10))
   const thisMonth = today.slice(0, 7)
   const months = reportMonths(issues, thisMonth)
+  const weeks = reportWeeks(issues, today)
+  const [unit, setUnit] = useState<PeriodUnit>('month')
+  const [week, setWeek] = useState(() => weekPeriod(today).from)
   const [choice, setChoice] = useState(thisMonth)
   const [from, setFrom] = useState(thisMonth + '-01')
   const [to, setTo] = useState(today)
   const [blocked, setBlocked] = useState(false)
+  const [showAllFixed, setShowAllFixed] = useState(false)
+  // The category whose reports are open under the category table.
+  const [openCategory, setOpenCategory] = useState<string | null>(null)
 
-  const custom = choice === 'custom'
+  const custom = unit === 'custom'
   const badRange = custom && (!from || !to || from > to)
-  const period = custom ? customPeriod(from, to) : monthPeriod(choice)
-  const count = badRange ? 0 : issuesInPeriod(issues, period).length
+  const period = custom ? customPeriod(from, to) : unit === 'week' ? weekPeriod(week) : monthPeriod(choice)
+  const reported = badRange ? [] : issuesInPeriod(issues, period)
+  const fixed = badRange
+    ? []
+    : fixedInPeriod(issues, period).sort((a, b) => fixedOn(b).localeCompare(fixedOn(a)))
+  const openCount = reported.filter(isOpen).length
 
-  const open = (print: boolean) => {
-    const html = buildReportHtml(issues, period, catInfo, auth.name ?? 'Residence administrator', scope)
-    setBlocked(!openReport(html, print))
-  }
+  // Reports and fixes per category, busiest category first.
+  const categoryRows = [...new Set([...reported, ...fixed].map((i) => i.category))]
+    .map((key) => {
+      const list = reported.filter((i) => i.category === key)
+      return {
+        key,
+        name: catInfo(key).name,
+        reported: list.length,
+        fixed: fixed.filter((i) => i.category === key).length,
+        open: list.filter(isOpen).length,
+      }
+    })
+    .filter((r) => r.reported || r.fixed)
+    .sort((a, b) => b.reported - a.reported || b.fixed - a.fixed || a.name.localeCompare(b.name))
+  const openList = openCategory
+    ? reported.filter((i) => i.category === openCategory).sort((a, b) => b.dateReported.localeCompare(a.dateReported))
+    : []
+
+  const html = () => buildReportHtml(issues, period, catInfo, auth.name ?? 'Residence administrator', scope)
+  const openReportTab = (print: boolean) => setBlocked(!openReport(html(), print))
+  const downloadDocument = () => downloadReportHtml(html(), `resifix-report-${period.slug}`)
 
   return (
-    <div className="card">
-      <h2>Period report</h2>
-      <p className="card-sub">A report for one month or dates you choose. View it, save it as a PDF, or download the issues as a spreadsheet.</p>
-      <div className="toolbar" style={{ alignItems: 'center' }}>
-        <select value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="Report period">
-          {months.map((m) => (
-            <option key={m} value={m}>
-              {monthPeriod(m).label}
-              {m === thisMonth ? ' (this month)' : ''}
-            </option>
-          ))}
-          <option value="custom">Choose dates…</option>
-        </select>
-        {custom && (
-          <>
-            <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
-            <span className="hotspot-note">to</span>
-            <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} aria-label="To" />
-          </>
-        )}
-      </div>
-      {badRange ? (
-        <div className="field-error">Pick a start date that is on or before the end date.</div>
-      ) : (
-        <p className="hotspot-note" style={{ marginTop: 0 }}>
-          {count} issue{count === 1 ? '' : 's'} reported in {period.label}.
+    <>
+      <div className="card">
+        <h2>Period report</h2>
+        <p className="card-sub">
+          Choose a week, a month or your own dates. See the reports by category and the issues fixed in the period, then download the report or a spreadsheet.
         </p>
-      )}
-      <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
-        <button className="btn btn-primary btn-sm" disabled={badRange} onClick={() => open(false)}>
-          <Icon name="eye" /> View report
-        </button>
-        <button className="btn btn-ghost btn-sm" disabled={badRange} onClick={() => open(true)}>
-          <Icon name="file-text" /> Download PDF
-        </button>
-        <button
-          className="btn btn-ghost btn-sm"
-          disabled={badRange || !count}
-          onClick={() => downloadIssuesCsv(issuesInPeriod(issues, period), catInfo, `resifix-report-${period.slug}`)}
-        >
-          <Icon name="list" /> Download spreadsheet (CSV)
-        </button>
+        <div className="toolbar" style={{ alignItems: 'center' }}>
+          <select value={unit} onChange={(e) => setUnit(e.target.value as PeriodUnit)} aria-label="Report period type">
+            <option value="week">Weekly</option>
+            <option value="month">Monthly</option>
+            <option value="custom">Choose dates…</option>
+          </select>
+          {unit === 'week' && (
+            <select value={week} onChange={(e) => setWeek(e.target.value)} aria-label="Week">
+              {weeks.map((w) => (
+                <option key={w} value={w}>
+                  {weekPeriod(w).label}
+                  {w === weekPeriod(today).from ? ' (this week)' : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          {unit === 'month' && (
+            <select value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="Month">
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {monthPeriod(m).label}
+                  {m === thisMonth ? ' (this month)' : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          {custom && (
+            <>
+              <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
+              <span className="hotspot-note">to</span>
+              <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} aria-label="To" />
+            </>
+          )}
+        </div>
+        {badRange ? (
+          <div className="field-error">Pick a start date that is on or before the end date.</div>
+        ) : (
+          <p className="hotspot-note" style={{ marginTop: 0 }}>
+            <b className="trend-num">{reported.length}</b> reported · <b className="trend-num">{fixed.length}</b> fixed ·{' '}
+            <b className="trend-num">{openCount}</b> still open in {period.label}.
+          </p>
+        )}
+        <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
+          <button className="btn btn-primary btn-sm" disabled={badRange} onClick={() => openReportTab(false)}>
+            <Icon name="eye" /> View report
+          </button>
+          <button className="btn btn-ghost btn-sm" disabled={badRange} onClick={() => openReportTab(true)} title="Opens the print dialog so you can save the report as a PDF">
+            <Icon name="file-text" /> Download PDF
+          </button>
+          <button className="btn btn-ghost btn-sm" disabled={badRange} onClick={downloadDocument} title="Saves the full report as a document you can open or print later">
+            <Icon name="file-text" /> Download document
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={badRange || !reported.length}
+            onClick={() => downloadIssuesCsv(reported, catInfo, `resifix-reported-${period.slug}`)}
+          >
+            <Icon name="list" /> Reported (CSV)
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={badRange || !fixed.length}
+            onClick={() => downloadIssuesCsv(fixed, catInfo, `resifix-fixed-${period.slug}`)}
+          >
+            <Icon name="check-circle" /> Fixed (CSV)
+          </button>
+        </div>
+        {blocked && <div className="field-error">Your browser blocked the new tab. Allow pop-ups for this site and try again.</div>}
       </div>
-      {blocked && <div className="field-error">Your browser blocked the new tab. Allow pop-ups for this site and try again.</div>}
-    </div>
+
+      {!badRange && (
+        <>
+          <div className="card">
+            <h2>Reported by category</h2>
+            <p className="card-sub">Issues reported in {period.label}, grouped by category. Open a category to see its reports.</p>
+            {categoryRows.length ? (
+              <table className="simple">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th style={{ textAlign: 'right' }}>Reported</th>
+                    <th style={{ textAlign: 'right' }}>Fixed</th>
+                    <th style={{ textAlign: 'right' }}>Still open</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {categoryRows.map((r) => (
+                    <tr key={r.key}>
+                      <td>{r.name}</td>
+                      <td className="trend-num" style={{ textAlign: 'right' }}>{r.reported}</td>
+                      <td className="trend-num" style={{ textAlign: 'right' }}>{r.fixed}</td>
+                      <td className="trend-num" style={{ textAlign: 'right' }}>{r.open}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          disabled={!r.reported}
+                          onClick={() => setOpenCategory(openCategory === r.key ? null : r.key)}
+                          aria-expanded={openCategory === r.key}
+                        >
+                          {openCategory === r.key ? 'Hide' : 'View'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <EmptyState icon="layers" title="No reports in this period" sub={`Nothing was reported in ${period.label}.`} />
+            )}
+            {openCategory && (
+              <div style={{ marginTop: 16 }}>
+                <h3 className="hotspot-title">
+                  {catInfo(openCategory).name} reports in {period.label} ({openList.length})
+                </h3>
+                {openList.length ? (
+                  openList.map((issue) => <IssueRow key={issue.id} issue={issue} />)
+                ) : (
+                  <p className="hotspot-note">No reports in this category for this period.</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <h2>Fixed in this period</h2>
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={!fixed.length}
+                onClick={() => downloadIssuesCsv(fixed, catInfo, `resifix-fixed-${period.slug}`)}
+                title="Download the fixed issues as a spreadsheet"
+              >
+                <Icon name="file-text" /> Download fixed (CSV)
+              </button>
+            </div>
+            <p className="card-sub">Issues fixed in {period.label}, newest first, whenever they were reported.</p>
+            {fixed.length ? (
+              <>
+                <ul className="hotspot-list">
+                  {(showAllFixed ? fixed : fixed.slice(0, 6)).map((issue) => (
+                    <li key={issue.id}>
+                      <button className="hotspot-row" onClick={() => setModal({ type: 'detail', issueId: issue.id })}>
+                        <span className="hotspot-head">
+                          <b>
+                            {issue.ref} · {issue.title}
+                          </b>
+                          <span>{catInfo(issue.category).name}</span>
+                        </span>
+                        <span className="hotspot-note">
+                          {issue.residence} · Room {issue.room} · fixed {formatDate(fixedOn(issue))}
+                          {issue.assignedToName ? ' by ' + issue.assignedToName : ''}
+                          {issue.feedback?.rating != null ? ` · ${issue.feedback.rating}★` : ''}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {fixed.length > 6 && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => setShowAllFixed(!showAllFixed)}>
+                    {showAllFixed ? 'Show fewer' : `Show all ${fixed.length} fixed issues`}
+                  </button>
+                )}
+              </>
+            ) : (
+              <EmptyState icon="check-circle" title="Nothing fixed yet" sub={`No issues were fixed in ${period.label}.`} />
+            )}
+          </div>
+        </>
+      )}
+    </>
   )
 }
 
