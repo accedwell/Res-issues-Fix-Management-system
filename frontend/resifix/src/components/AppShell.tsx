@@ -11,6 +11,7 @@ import { NAV, PAGE_TITLES, ROLE_NAMES } from '../data/constants'
 import { AdminDashboard } from '../dashboards/AdminDashboard'
 import { MaintenanceDashboard } from '../dashboards/MaintenanceDashboard'
 import { StudentDashboard } from '../dashboards/StudentDashboard'
+import { SupervisorDashboard } from '../dashboards/SupervisorDashboard'
 import { SysAdminDashboard } from '../dashboards/SysAdminDashboard'
 import { initials } from '../utils'
 import type { Role } from '../types'
@@ -20,6 +21,7 @@ const DASHBOARDS = {
   admin: AdminDashboard,
   maintenance: MaintenanceDashboard,
   sysadmin: SysAdminDashboard,
+  supervisor: SupervisorDashboard,
 }
 
 export function AppShell() {

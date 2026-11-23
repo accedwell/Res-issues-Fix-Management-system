@@ -16,6 +16,9 @@ export interface DutyShift {
   autoClosed: boolean;
   breakUntil: string | null;
   breakMinutes: number;
+  // Name of whoever did it for them (supervisor / system admin); null when they did it themselves.
+  clockedInBy: string | null;
+  clockedOutBy: string | null;
 }
 
 export type CodeMode = "daily" | "rotating";
@@ -41,6 +44,8 @@ type ShiftRow = {
   autoClosed: boolean;
   breakUntil: Date | null;
   breakMinutes: number;
+  clockedInBy: string | null;
+  clockedOutBy: string | null;
 };
 
 const toShift = (row: ShiftRow): DutyShift => ({
@@ -51,6 +56,8 @@ const toShift = (row: ShiftRow): DutyShift => ({
   autoClosed: row.autoClosed,
   breakUntil: row.breakUntil?.toISOString() ?? null,
   breakMinutes: row.breakMinutes,
+  clockedInBy: row.clockedInBy,
+  clockedOutBy: row.clockedOutBy,
 });
 
 async function saveSetting(key: string, value: string, description: string) {
@@ -143,10 +150,11 @@ export async function openShift(userId: string): Promise<DutyShift | undefined> 
 }
 
 // Starts a shift. If they are already on duty the existing shift is kept (started is false).
-export async function clockIn(userId: string): Promise<{ shift: DutyShift; started: boolean }> {
+// byName: who clocked them in, when someone did it for them.
+export async function clockIn(userId: string, byName: string | null = null): Promise<{ shift: DutyShift; started: boolean }> {
   const current = await openShift(userId);
   if (current) return { shift: current, started: false };
-  return { shift: toShift(await prisma.dutyShift.create({ data: { userId } })), started: true };
+  return { shift: toShift(await prisma.dutyShift.create({ data: { userId, clockedInBy: byName } })), started: true };
 }
 
 // Minutes of a break that has run until "end" (or until it was due to finish, if earlier).
@@ -157,14 +165,14 @@ function breakTaken(row: { breakStartedAt: Date | null; breakUntil: Date | null 
 }
 
 // Ends the open shift, if there is one (a break in progress ends with it).
-export async function clockOut(userId: string): Promise<DutyShift | undefined> {
+export async function clockOut(userId: string, byName: string | null = null): Promise<DutyShift | undefined> {
   const row = await prisma.dutyShift.findFirst({ where: { userId, clockOutAt: null }, orderBy: { clockInAt: "desc" } });
   if (!row) return undefined;
   const now = new Date();
   return toShift(
     await prisma.dutyShift.update({
       where: { id: row.id },
-      data: { clockOutAt: now, breakMinutes: row.breakMinutes + breakTaken(row, now), breakStartedAt: null, breakUntil: null },
+      data: { clockOutAt: now, clockedOutBy: byName, breakMinutes: row.breakMinutes + breakTaken(row, now), breakStartedAt: null, breakUntil: null },
     }),
   );
 }

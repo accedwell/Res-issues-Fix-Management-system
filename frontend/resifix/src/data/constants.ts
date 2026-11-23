@@ -95,6 +95,7 @@ export const ROLE_NAMES: Record<Role, string> = {
   admin: 'Staff Manager',
   maintenance: 'Maintenance Staff',
   sysadmin: 'System Administrator',
+  supervisor: 'Supervisor',
 }
 
 export const NAV: Record<Role, NavItem[]> = {
@@ -118,8 +119,16 @@ export const NAV: Record<Role, NavItem[]> = {
   ],
   sysadmin: [
     { key: 'users', label: 'Users', icon: 'users' },
+    { key: 'assignments', label: 'Assignments', icon: 'tools' },
+    { key: 'availability', label: 'Team Availability', icon: 'clock' },
     { key: 'categories', label: 'Categories', icon: 'layers' },
     { key: 'settings', label: 'Settings', icon: 'settings' },
+  ],
+  supervisor: [
+    { key: 'overview', label: 'Home', icon: 'home' },
+    { key: 'issues', label: 'All Issues', icon: 'list' },
+    { key: 'assignments', label: 'Assignments', icon: 'tools' },
+    { key: 'availability', label: 'Team Availability', icon: 'clock' },
   ],
 }
 
@@ -127,7 +136,14 @@ export const PAGE_TITLES: Record<Role, Record<string, string>> = {
   student: { overview: 'Home', report: 'Report an Issue', reports: 'My Reports', notifications: 'Notifications' },
   admin: { overview: 'Home', issues: 'All Issues', parts: 'Parts Store', duty: 'Clock-in & Who Is On Duty', reports: 'Reports' },
   maintenance: { assigned: 'Assigned to Me', completed: 'Completed Tasks', parts: 'Parts Store', reports: 'My Reports' },
-  sysadmin: { users: 'Manage Users', categories: 'Manage Categories', settings: 'System Settings' },
+  sysadmin: {
+    users: 'Manage Users',
+    assignments: 'Who Is Assigned to What',
+    availability: 'Team Availability',
+    categories: 'Manage Categories',
+    settings: 'System Settings',
+  },
+  supervisor: { overview: 'Home', issues: 'All Issues', assignments: 'Who Is Assigned to What', availability: 'Team Availability' },
 }
 
 export const DEFAULT_TABS: Record<Role, string> = {
@@ -135,6 +151,7 @@ export const DEFAULT_TABS: Record<Role, string> = {
   admin: 'overview',
   maintenance: 'assigned',
   sysadmin: 'users',
+  supervisor: 'overview',
 }
 
 // Quick views of the issue list. The dashboard stat tiles open the list on one of these.
@@ -142,6 +159,7 @@ export const ISSUE_VIEWS = [
   { key: 'all', label: 'All issues' },
   { key: 'open', label: 'Currently open' },
   { key: 'unassigned', label: 'Awaiting assignment' },
+  { key: 'unaccepted', label: 'Not accepted yet' },
   { key: 'urgent', label: 'Urgent & open' },
   { key: 'overdue', label: 'Overdue' },
   { key: 'reopened', label: 'Re-opened' },

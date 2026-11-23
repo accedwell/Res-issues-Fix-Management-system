@@ -3,13 +3,17 @@ import { Icon } from './Icon'
 import { IssuePhoto } from './IssuePhoto'
 import { ProgressSteps } from './ProgressSteps'
 import { ChatModal } from './Chat'
+import { CallButton } from './CallButton'
 import { PartFormModal, RemovePartModal, RequestPartModal, RestockPartModal, TakePartModal } from './PartModals'
 import { useApp } from '../context/appContext'
 import { PasswordInput } from './PasswordInput'
 import {
   BLOCKS, CATEGORY_ICONS, GENERAL_SPECIALIZATION, PRIORITIES, PRIORITY_CLASS, ROLE_NAMES, SHARED_PLACES, SPECIALIZATIONS, STATUS_CLASS, isReportableCategory,
 } from '../data/constants'
-import { canEditReport, canReportNotFixed, emailDomainForRole, formatDate, isEmailForRole, isOpen, isOverdue, notResolvedReason, recommendStaff } from '../utils'
+import {
+  ACCEPT_WITHIN_MINUTES, awaitingAcceptance, canEditReport, canReportNotFixed, emailDomainForRole, formatDate, isEmailForRole, isOpen, isOverdue,
+  notAcceptedInTime, notResolvedReason, recommendStaff,
+} from '../utils'
 import type { Category, Issue, Priority, Role, Status } from '../types'
 
 export function ModalHost() {
@@ -72,6 +76,7 @@ export function ModalHost() {
         editReport: <EditReportModal issue={issue} close={close} />,
         cancelReport: <CancelReportModal issue={issue} close={close} />,
         chat: <ChatModal issue={issue} close={close} />,
+        decline: <DeclineJobModal issue={issue} close={close} />,
       }[modal.type]
   }
 
@@ -93,14 +98,21 @@ interface IssueModalProps {
 }
 
 function DetailModal({ issue, close }: IssueModalProps) {
-  const { catInfo, auth, setModal, staff: staffList, receiveIssue } = useApp()
+  const { catInfo, auth, setModal, staff: staffList, receiveIssue, acceptJob, confirmAcceptedByPhone } = useApp()
   const [busy, setBusy] = useState(false)
-  const isAdmin = auth.role === 'admin'
+  // The staff manager and the supervisor can mark new reports received; only the supervisor assigns.
+  const isAdmin = auth.role === 'admin' || auth.role === 'supervisor'
+  const canAssign = auth.role === 'supervisor'
   const category = catInfo(issue.category)
   const assignedName = issue.assignedToName ?? staffList.find((s) => s.id === issue.assignedTo)?.name
   const notResolved = notResolvedReason(issue)
   const studentCanEdit = canEditReport(issue, auth)
   const studentCanReopen = auth.role === 'student' && issue.studentId === auth.studentId && canReportNotFixed(issue)
+  const isTech = auth.role === 'maintenance'
+  const waitingToAccept = awaitingAcceptance(issue)
+  // The staff manager and the system admin are both alerted to phone the technician.
+  // The supervisor and the system admin are alerted to phone the technician.
+  const canConfirmByPhone = auth.role === 'supervisor' || auth.role === 'sysadmin'
 
   return (
     <div className="modal">
@@ -133,6 +145,38 @@ function DetailModal({ issue, close }: IssueModalProps) {
             {formatDate(notResolved.date)}
             {studentCanReopen ? ' · If it is still a problem, use “Still not fixed” below to push it again.' : ''}
           </span>
+        </div>
+      )}
+      {waitingToAccept && (
+        <div className={'accept-box' + (canConfirmByPhone && notAcceptedInTime(issue) ? ' late' : '')}>
+          {auth.role === 'student' ? (
+            <>
+              <b>Assigned to {assignedName ?? 'maintenance'}</b>
+              <span>Waiting for them to accept the job. You will be notified as soon as they do.</span>
+            </>
+          ) : isTech ? (
+            <>
+              <b>New job for you</b>
+              <span>Accept it if you can take it, or decline it so it goes to someone else.</span>
+            </>
+          ) : notAcceptedInTime(issue) ? (
+            <>
+              <b>{assignedName ?? 'The technician'} has not accepted this job</b>
+              <span>
+                No answer after {ACCEPT_WITHIN_MINUTES} minutes. Phone them, as they may not have a smartphone with them, then choose “Accepted by
+                phone” or reassign it.
+              </span>
+              {canConfirmByPhone && <CallButton phone={issue.assignedToPhone} name={assignedName} />}
+            </>
+          ) : (
+            <>
+              <b>Waiting for {assignedName ?? 'the technician'} to accept</b>
+              <span>
+                If they do not answer within {ACCEPT_WITHIN_MINUTES} minutes,{' '}
+                {canConfirmByPhone ? 'you will be notified to call them.' : 'the supervisor will be notified to call them.'}
+              </span>
+            </>
+          )}
         </div>
       )}
       {issue.reopened ? (
@@ -173,7 +217,10 @@ function DetailModal({ issue, close }: IssueModalProps) {
           </tr>
           <tr>
             <td>Assigned to</td>
-            <td>{assignedName || '—'}</td>
+            <td>
+              {assignedName || '—'}
+              {assignedName && waitingToAccept ? ' (waiting to accept)' : ''}
+            </td>
           </tr>
         </tbody>
       </table>
@@ -216,7 +263,36 @@ function DetailModal({ issue, close }: IssueModalProps) {
             <Icon name="check" /> {busy ? 'Saving…' : 'Mark as received'}
           </button>
         )}
-        {isAdmin && isOpen(issue) && (
+        {isTech && waitingToAccept && (
+          <>
+            <button className="btn btn-ghost" onClick={() => setModal({ type: 'decline', issueId: issue.id })}>
+              <Icon name="x" /> Decline
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                if (!(await acceptJob(issue))) setBusy(false)
+              }}
+            >
+              <Icon name="check" /> {busy ? 'Saving…' : 'Accept job'}
+            </button>
+          </>
+        )}
+        {canConfirmByPhone && waitingToAccept && (
+          <button
+            className="btn btn-ghost"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              if (!(await confirmAcceptedByPhone(issue))) setBusy(false)
+            }}
+          >
+            <Icon name="check" /> {busy ? 'Saving…' : 'Accepted by phone'}
+          </button>
+        )}
+        {canAssign && isOpen(issue) && (
           <button className="btn btn-primary" onClick={() => setModal({ type: 'assign', issueId: issue.id })}>
             {issue.assignedTo ? 'Reassign' : 'Assign'}
           </button>
@@ -376,6 +452,70 @@ function UpdateModal({ issue, close }: IssueModalProps) {
         </button>
         <button className="btn btn-primary" onClick={save}>
           Save update
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Reasons a technician can pick when turning down a job; "Other" lets them type their own.
+const DECLINE_REASONS = ['Busy with another job', 'Not my kind of job', 'Not at work / off site', 'Other']
+
+function DeclineJobModal({ issue, close }: IssueModalProps) {
+  const { declineJob } = useApp()
+  const [choice, setChoice] = useState(DECLINE_REASONS[0])
+  const [other, setOther] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const save = async () => {
+    const reason = choice === 'Other' ? other.trim() : choice
+    if (!reason) return setError('Please say why you cannot take this job.')
+    setBusy(true)
+    if (!(await declineJob(issue, reason))) setBusy(false)
+  }
+
+  return (
+    <div className="modal">
+      <h3>Decline this job?</h3>
+      <p className="modal-sub">
+        {issue.ref} — {issue.title}. It will go to another technician on duty, and the staff manager will be told.
+      </p>
+      <div className="field">
+        <label>Why can’t you take it?</label>
+        <select
+          value={choice}
+          onChange={(e) => {
+            setChoice(e.target.value)
+            setError('')
+          }}
+        >
+          {DECLINE_REASONS.map((r) => (
+            <option key={r}>{r}</option>
+          ))}
+        </select>
+      </div>
+      {choice === 'Other' && (
+        <div className="field">
+          <label>Reason</label>
+          <textarea
+            value={other}
+            maxLength={300}
+            onChange={(e) => {
+              setOther(e.target.value)
+              setError('')
+            }}
+            placeholder="e.g. I need a ladder that is not here"
+          />
+        </div>
+      )}
+      {error && <div className="field-error">{error}</div>}
+      <div className="modal-actions">
+        <button className="btn btn-ghost" onClick={close}>
+          Cancel
+        </button>
+        <button className="btn btn-primary" disabled={busy} onClick={save}>
+          {busy ? 'Saving…' : 'Decline job'}
         </button>
       </div>
     </div>
@@ -625,13 +765,13 @@ function NotFixedModal({ issue, close }: IssueModalProps) {
   )
 }
 
-const NEW_USER_ROLES: Role[] = ['student', 'admin', 'maintenance', 'sysadmin']
+const NEW_USER_ROLES: Role[] = ['student', 'admin', 'supervisor', 'maintenance', 'sysadmin']
 
 function AddUserModal({ close }: { close: () => void }) {
   const { addUser } = useApp()
   const [form, setForm] = useState({
     name: '', role: 'maintenance' as Role, email: '', password: '',
-    specialization: GENERAL_SPECIALIZATION, studentNumber: '', block: BLOCKS[0], room: '',
+    specialization: GENERAL_SPECIALIZATION, studentNumber: '', block: BLOCKS[0], room: '', phone: '',
   })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -653,6 +793,7 @@ function AddUserModal({ close }: { close: () => void }) {
       role: form.role,
       password: form.password,
       ...(form.role === 'maintenance' ? { specialization: form.specialization } : {}),
+      ...(!isStudent && form.phone.trim() ? { phone: form.phone.trim() } : {}),
       ...(isStudent ? { studentNumber: form.studentNumber.trim(), block: form.block, room: form.room.trim() } : {}),
     })
     if (!ok) setBusy(false)
@@ -686,6 +827,13 @@ function AddUserModal({ close }: { close: () => void }) {
         <PasswordInput value={form.password} onChange={field('password')} autoComplete="new-password" />
         <div className="field-hint">At least 8 characters. They can change it with “Forgot password?”.</div>
       </div>
+      {form.role !== 'student' && (
+        <div className="field">
+          <label>Phone number</label>
+          <input type="tel" value={form.phone} onChange={field('phone')} placeholder="e.g. 082 555 0101" autoComplete="off" />
+          <div className="field-hint">So the supervisor can call them, e.g. when a job is not accepted.</div>
+        </div>
+      )}
       {form.role === 'maintenance' && (
         <div className="field">
           <label>Specialization</label>
@@ -740,6 +888,7 @@ function EditUserModal({ userId, close }: { userId: string; close: () => void })
     block: user?.block ?? BLOCKS[0],
     room: user?.room ?? '',
     specialization: user?.specialization ?? GENERAL_SPECIALIZATION,
+    phone: user?.phone ?? '',
   })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -752,7 +901,7 @@ function EditUserModal({ userId, close }: { userId: string; close: () => void })
   const submit = async () => {
     if (isStudent && !form.room.trim()) return setError('Please fill in the room.')
     setBusy(true)
-    const details = isStudent ? { block: form.block, room: form.room.trim() } : { specialization: form.specialization }
+    const details = isStudent ? { block: form.block, room: form.room.trim() } : { specialization: form.specialization, phone: form.phone.trim() }
     if (!(await editUser(userId, details))) setBusy(false)
   }
 
@@ -760,7 +909,7 @@ function EditUserModal({ userId, close }: { userId: string; close: () => void })
     <div className="modal">
       <h3>Edit {user.name}</h3>
       <p className="modal-sub">
-        {isStudent ? 'Correct the block or room this student registered with.' : 'Change the kind of jobs this staff member handles.'}
+        {isStudent ? 'Correct the block or room this student registered with.' : 'Change the kind of jobs this staff member handles, or their phone number.'}
       </p>
       {isStudent ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -778,14 +927,21 @@ function EditUserModal({ userId, close }: { userId: string; close: () => void })
           </div>
         </div>
       ) : (
-        <div className="field">
-          <label>Job type</label>
-          <select value={form.specialization} onChange={field('specialization')}>
-            {[...new Set([...SPECIALIZATIONS, form.specialization])].map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        </div>
+        <>
+          <div className="field">
+            <label>Job type</label>
+            <select value={form.specialization} onChange={field('specialization')}>
+              {[...new Set([...SPECIALIZATIONS, form.specialization])].map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Phone number</label>
+            <input type="tel" value={form.phone} onChange={field('phone')} placeholder="e.g. 082 555 0101" />
+            <div className="field-hint">The supervisor calls this number when they do not accept a job. Leave empty to remove it.</div>
+          </div>
+        </>
       )}
       {error && <div className="field-error">{error}</div>}
       <div className="modal-actions">

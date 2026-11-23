@@ -314,6 +314,19 @@ def process_issue(conn, issue, categories: dict) -> str:
             add_history(cur, issue["id"], "Submitted", "COMMENT_ADDED",
                         f"Auto-assign: looks like {categories.get(category, category)}, but no technician is "
                         "on duty. It will go to the first technician who clocks in, or the staff manager can assign it.")
+            # Tell the student it is waiting (once per report) and that they will hear who gets it.
+            cur.execute(
+                "SELECT 1 FROM notifications WHERE issue_id = %s AND title = 'Waiting for a technician'",
+                (issue["id"],),
+            )
+            if cur.fetchone() is None:
+                cur.execute("SELECT reporter_id FROM maintenance_issues WHERE id = %s", (issue["id"],))
+                reporter = cur.fetchone()
+                if reporter:
+                    add_notification(cur, reporter["reporter_id"], issue["id"], "Waiting for a technician",
+                                     f"{issue['reference']} is waiting for a technician: nobody is on duty right now. "
+                                     "It will be assigned as soon as someone clocks in, and you will be told who.",
+                                     "STATUS_UPDATED")
             # Urgent reports can't wait for someone to clock in: tell the staff manager now.
             if priority == "URGENT":
                 cur.execute("SELECT id FROM users WHERE role = 'ADMIN' AND is_active = TRUE")
@@ -329,7 +342,7 @@ def process_issue(conn, issue, categories: dict) -> str:
         cur.execute(
             """
             UPDATE maintenance_issues
-               SET assignee_id = %s, category_id = %s, priority = %s,
+               SET assignee_id = %s, category_id = %s, priority = %s, accepted_at = NULL,
                    status = 'ASSIGNED', assigned_at = NOW(), updated_at = NOW()
              WHERE id = %s
                AND assignee_id IS NULL
@@ -350,7 +363,7 @@ def process_issue(conn, issue, categories: dict) -> str:
         reporter = cur.fetchone()
         if reporter:
             add_notification(cur, reporter["reporter_id"], issue["id"], "Report assigned",
-                             f"{issue['reference']} has been assigned to {tech['full_name']}.")
+                             f"{issue['reference']} has been assigned to {tech['full_name']}. Waiting for them to accept the job.")
         conn.commit()
         log(f"  OK assigned to {tech['full_name']} ({tech['specialization']}, had {tech['open_jobs']} open jobs)")
 

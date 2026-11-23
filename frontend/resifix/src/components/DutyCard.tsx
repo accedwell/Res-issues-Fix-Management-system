@@ -178,7 +178,20 @@ export function DutyCard() {
 
 // Clocking out with jobs still open: pick any to hand back, so someone still at work can take them.
 // Urgent ones are ticked to start with.
-function HandOver({ jobs, busy, close, confirm }: { jobs: Issue[]; busy: boolean; close: () => void; confirm: (ids: string[]) => void }) {
+// who: the technician's name when the supervisor or system admin is clocking them out.
+export function HandOver({
+  jobs,
+  busy,
+  close,
+  confirm,
+  who,
+}: {
+  jobs: Issue[]
+  busy: boolean
+  close: () => void
+  confirm: (ids: string[]) => void
+  who?: string
+}) {
   const [picked, setPicked] = useState(() => new Set(jobs.filter((j) => j.priority === 'Urgent').map((j) => j.id)))
   const toggle = (id: string) =>
     setPicked((prev) => {
@@ -191,9 +204,11 @@ function HandOver({ jobs, busy, close, confirm }: { jobs: Issue[]; busy: boolean
   return createPortal(
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
       <div className="modal">
-        <h3>Clock out</h3>
+        <h3>{who ? `Clock out ${who}` : 'Clock out'}</h3>
         <p className="modal-sub">
-          You still have {jobs.length} open job(s). Tick any you want to hand back so someone else can do them today. The rest stay yours.
+          {who
+            ? `${who} still has ${jobs.length} open job(s). Tick any to hand back so someone else can do them today. The rest stay with ${who}.`
+            : `You still have ${jobs.length} open job(s). Tick any you want to hand back so someone else can do them today. The rest stay yours.`}
         </p>
         <ul className="handover-list">
           {jobs.map((j) => (

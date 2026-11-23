@@ -116,7 +116,7 @@ const TOURS: Record<Role, { steps: TourStep[]; finish: Finish }> = {
     steps: [
       {
         title: 'Welcome, staff manager',
-        text: 'You oversee every report in the residence. Most reports are assigned to a technician automatically, and you can step in at any time.',
+        text: 'You oversee every report in the residence. Reports are assigned to technicians automatically or by the supervisor.',
       },
       {
         title: 'Home',
@@ -126,7 +126,7 @@ const TOURS: Record<Role, { steps: TourStep[]; finish: Finish }> = {
       },
       {
         title: 'All issues',
-        text: 'Every report. Open one to mark it received, assign or re-assign a technician, or change its priority.',
+        text: 'Every report and who is working on it. Open one to mark it received or read its history.',
         target: ['nav-issues'],
       },
       {
@@ -161,7 +161,7 @@ const TOURS: Record<Role, { steps: TourStep[]; finish: Finish }> = {
       },
       {
         title: 'Users',
-        text: 'Create staff manager and maintenance accounts and set each technician’s job. Students sign up themselves.',
+        text: 'Create staff manager, supervisor and maintenance accounts and set each technician’s job. Students sign up themselves.',
         target: ['nav-users'],
         tab: 'users',
       },
@@ -182,6 +182,41 @@ const TOURS: Record<Role, { steps: TourStep[]; finish: Finish }> = {
       },
     ],
     finish: { label: 'Manage users', tab: 'users' },
+  },
+  supervisor: {
+    steps: [
+      {
+        title: 'Welcome, supervisor',
+        text: 'You give jobs to technicians and make sure someone takes them. Most reports are assigned automatically; you step in when they are not.',
+      },
+      {
+        title: 'Home',
+        text: 'Reports that need you first: jobs nobody accepted, unassigned reports and anything overdue. Assign or reassign them from here.',
+        target: ['nav-overview'],
+        tab: 'overview',
+      },
+      {
+        title: 'All issues',
+        text: 'Every report. Open one to assign or reassign a technician, or change its priority.',
+        target: ['nav-issues'],
+      },
+      {
+        title: 'Assignments',
+        text: 'Who is doing each job, whether the system or you assigned it, and whether they accepted it. If someone has not accepted after 2 minutes, phone them and tap “Accepted by phone”.',
+        target: ['nav-assignments'],
+      },
+      {
+        title: 'Team availability',
+        text: 'Clock a technician in or out, or start and end their break, for them — for example someone without a phone. They are notified and it is recorded that you did it.',
+        target: ['nav-availability'],
+      },
+      {
+        title: 'Need this again?',
+        text: 'Tap this button any time to replay the tour.',
+        target: ['help'],
+      },
+    ],
+    finish: { label: 'See what needs attention', tab: 'overview' },
   },
 }
 

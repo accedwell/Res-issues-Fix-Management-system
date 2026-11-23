@@ -1,4 +1,4 @@
-export type Role = 'student' | 'admin' | 'maintenance' | 'sysadmin'
+export type Role = 'student' | 'admin' | 'maintenance' | 'sysadmin' | 'supervisor'
 
 export type Route = 'landing' | 'login' | 'signup' | 'forgot'
 
@@ -45,6 +45,10 @@ export interface Staff {
   onLeaveToday: boolean
   // On duty and not on a break.
   available: boolean
+  // The supervisor / system admin who clocked them in for them; null when they scanned in themselves.
+  clockedInBy?: string | null
+  // Number to call them on, when the system admin has saved one.
+  phone?: string | null
 }
 
 // When the working day starts and ends, e.g. "07:30" and "16:30", and the weekdays worked
@@ -99,6 +103,9 @@ export interface DutyShift {
   lateMinutes: number | null
   // Minutes before the end of work they clocked out, when they left early.
   earlyMinutes: number | null
+  // Who did it for them (supervisor / system admin); null when they did it themselves.
+  clockedInBy?: string | null
+  clockedOutBy?: string | null
 }
 
 // The code to show at the office: the printed daily code, or the wall screen's 30-second code.
@@ -165,12 +172,17 @@ export interface Issue {
   assignedTo: string | null
   // Sent by the server so students can see who is working on their report.
   assignedToName?: string | null
+  // Staff only (supervisor, staff manager, system admin): the technician's number, to call them.
+  assignedToPhone?: string | null
   dateReported: string
   reportedAt?: string
   photo: boolean
   history: HistoryEntry[]
   feedback: Feedback | null
   reopened?: number
+  // When it was last assigned, and when the technician accepted it (null while waiting for them to accept).
+  assignedAt?: string | null
+  acceptedAt?: string | null
   // Sent by the server when the viewer may see the chat on this report (see Chat.tsx).
   chat?: ChatSummary | null
   // Only on reports filed with the AI assistant: its notes for maintenance (likely cause, what to bring).
@@ -247,6 +259,7 @@ export interface User {
   block?: string
   room?: string
   specialization?: string
+  phone?: string
 }
 
 // A spare part in the maintenance store room.
@@ -331,7 +344,7 @@ export interface NavItem {
 
 export type Modal =
   | { type: 'overdue' }
-  | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed' | 'editReport' | 'cancelReport' | 'chat'; issueId: string }
+  | { type: 'detail' | 'assign' | 'update' | 'feedback' | 'notfixed' | 'editReport' | 'cancelReport' | 'chat' | 'decline'; issueId: string }
   | { type: 'addUser' }
   | { type: 'removeUser'; userId: string }
   | { type: 'editUser'; userId: string }

@@ -12,6 +12,8 @@ enum UserRole {
   MAINTENANCE
   ADMIN
   SYSADMIN
+  // Assigns jobs to technicians, and can update a technician's availability for them.
+  SUPERVISOR
 }
 
 enum IssueStatus {
@@ -143,6 +145,9 @@ model MaintenanceIssue {
 
   reportedAt DateTime  @default(now()) @map("reported_at")
   assignedAt DateTime? @map("assigned_at")
+  // When the assigned technician accepted the job (or the staff manager confirmed it by phone).
+  // Empty while the job is waiting to be accepted; after 2 minutes the managers are told to call them.
+  acceptedAt DateTime? @map("accepted_at")
   startedAt  DateTime? @map("started_at")
   resolvedAt DateTime? @map("resolved_at")
   closedAt   DateTime? @map("closed_at")
@@ -334,6 +339,11 @@ model DutyShift {
   breakUntil     DateTime? @map("break_until")
   // Minutes of finished breaks in this shift, left out of hours worked.
   breakMinutes   Int       @default(0) @map("break_minutes")
+
+  // Who clocked them in / out when it was done for them (e.g. a technician without a phone):
+  // the supervisor's or system admin's name. Empty when they did it themselves.
+  clockedInBy  String? @map("clocked_in_by")
+  clockedOutBy String? @map("clocked_out_by")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

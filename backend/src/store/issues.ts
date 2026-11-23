@@ -47,6 +47,8 @@ function toIssue(row: IssueRow): Issue {
     })),
     feedback: row.feedback ? { rating: row.feedback.rating, comment: row.feedback.comment ?? "" } : null,
     reopened: row.reopenCount,
+    assignedAt: row.assignedAt?.toISOString() ?? null,
+    acceptedAt: row.acceptedAt?.toISOString() ?? null,
     ...assistantNotes(row.systemReport),
   };
 }
@@ -152,6 +154,7 @@ export async function updateIssue(id: string, changes: Partial<Issue>): Promise<
   if (changes.assignedTo !== undefined) data.assigneeId = changes.assignedTo;
   if (changes.photo !== undefined) data.hasPhoto = changes.photo;
   if (changes.reopened !== undefined) data.reopenCount = changes.reopened;
+  if (changes.acceptedAt !== undefined) data.acceptedAt = changes.acceptedAt ? new Date(changes.acceptedAt) : null;
   if (changes.status !== undefined) {
     data.status = statusToDb(changes.status);
     const stamp = STATUS_TIMESTAMP[changes.status];

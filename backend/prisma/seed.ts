@@ -57,8 +57,17 @@ async function main() {
     });
   }
 
-  // Five demo accounts.
+  // Six demo accounts.
   const users = [
+    {
+      id: "user-supervisor",
+      fullName: "ResiFix Supervisor",
+      email: "supervisor@resstaff.ac.za",
+      role: "SUPERVISOR" as const,
+      studentNumber: null,
+      blockId: null,
+      roomNumber: null,
+    },
     {
       id: "user-admin",
       fullName: "ResiFix Staff Manager",

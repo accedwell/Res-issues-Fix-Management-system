@@ -3,7 +3,7 @@ import { AppContext, type AppState } from './appContext'
 import {
   apiAddCategory, apiAddUser, apiEditUser, apiAssignIssue, apiReceiveIssue, apiConfirmResolution, apiCreateIssue, apiEditCategory, apiMe,
   apiReadAllNotifications, apiReadNotification, apiRemoveCategory, apiRemoveUser, apiReportNotFixed, apiEditIssue, apiCancelIssue, apiSetSetting,
-  apiSubmitAssistantReport, apiUpdateProgress, clearToken, connectLiveUpdates, fetchCategories, fetchIssues, fetchNotifications, fetchSettings,
+  apiSubmitAssistantReport, apiUpdateProgress, apiAcceptJob, apiDeclineJob, apiAcceptedByPhone, apiStaffClockIn, apiStaffClockOut, apiStaffBreak, apiStaffEndBreak, clearToken, connectLiveUpdates, fetchCategories, fetchIssues, fetchNotifications, fetchSettings,
   fetchStaff, fetchUsers, getToken, type ApiUser, type Topic, fetchParts, apiTakePart, apiRequestPart, apiRestockPart, apiAddPart, apiEditPart,
   apiRemovePart, apiClockIn, apiClockOut, apiStartBreak, apiEndBreak, fetchMyDuty,
 } from '../api'
@@ -23,6 +23,7 @@ const TOPICS_FOR_ROLE: Record<Role, Topic[]> = {
   maintenance: ['issues', 'notifications', 'categories', 'parts', 'duty'],
   admin: ['issues', 'notifications', 'categories', 'staff', 'parts'],
   sysadmin: ['issues', 'notifications', 'categories', 'staff', 'users', 'settings'],
+  supervisor: ['issues', 'notifications', 'categories', 'staff'],
 }
 
 // The user list shows one "details" column: room for students, job for maintenance staff.
@@ -31,11 +32,11 @@ function toUserRow(user: ApiUser): User {
     user.role === 'student'
       ? [user.block, user.room && 'Room ' + user.room].filter(Boolean).join(' · ')
       : user.role === 'maintenance'
-        ? (user.specialization ?? '')
-        : ''
+        ? [user.specialization, user.phone].filter(Boolean).join(' · ')
+        : (user.phone ?? '')
   return {
     id: user.id, name: user.name, role: ROLE_NAMES[user.role], email: user.email, extra: extra || '—',
-    kind: user.role, block: user.block, room: user.room, specialization: user.specialization,
+    kind: user.role, block: user.block, room: user.room, specialization: user.specialization, phone: user.phone,
   }
 }
 
@@ -65,6 +66,9 @@ function forgetClockInLink() {
 
 // Attendance messages the staff manager gets a pop-up for, as they happen.
 const DUTY_ALERT = /^(Clocked (in|out)|Not clocked in|On break|Back from break|Handed back):/
+// Updates a student should see the moment they happen: who their report was assigned to, when that
+// person accepts it, and when it is fixed or could not be fixed. Their own actions are left out.
+const STUDENT_ALERT = /has been assigned to|is waiting for a technician|accepted the job|has been marked Resolved|could not be resolved|is now (In Progress|Received)/
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong. Please try again.')
 
@@ -137,9 +141,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const list = await fetchNotifications()
           // The staff manager gets a pop-up the moment someone clocks in or out.
           const seen = seenNotifications.current
-          if (seen && role === 'admin') {
+          if (seen && (role === 'admin' || role === 'supervisor')) {
             const clock = list.filter((n) => !seen.has(n.id) && !n.read && DUTY_ALERT.test(n.message))
             if (clock.length) showToast(clock.length === 1 ? clock[0].message : `${clock.length} attendance updates — check the bell.`)
+          }
+          // A student gets a pop-up the moment their report is assigned, accepted or fixed.
+          if (seen && role === 'student') {
+            const news = list.filter((n) => !seen.has(n.id) && !n.read && STUDENT_ALERT.test(n.message))
+            if (news.length) showToast(news.length === 1 ? news[0].message : `${news.length} updates on your reports — check the bell.`)
           }
           seenNotifications.current = new Set(list.map((n) => n.id))
           setNotifications(list)
@@ -322,8 +331,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTab('reports')
         showToast(
           issue.assignedToName
-            ? `Report ${issue.ref} sent to ${issue.assignedToName} in maintenance.`
-            : `Report submitted — reference ${issue.ref}`,
+            ? `Report ${issue.ref} assigned to ${issue.assignedToName} — waiting for them to accept the job.`
+            : `Report ${issue.ref} submitted. Nobody is on duty right now — you will be told who it is assigned to as soon as a technician clocks in.`,
         )
         return true
       } catch (err) {
@@ -355,6 +364,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     cancelReport: (issue) => save(() => apiCancelIssue(issue.id), ISSUE_TOPICS, `${issue.ref} was cancelled.`),
     reportNotFixed: (issue, reason) =>
       save(() => apiReportNotFixed(issue.id, reason), ISSUE_TOPICS, 'Report sent again — the residence team has been notified.'),
+    acceptJob: (issue) => save(() => apiAcceptJob(issue.id), ISSUE_TOPICS, `You accepted ${issue.ref}. The student has been told.`),
+    declineJob: (issue, reason) =>
+      save(() => apiDeclineJob(issue.id, reason), ISSUE_TOPICS, (result) =>
+        result.passedTo
+          ? `You declined ${issue.ref}. It was passed to ${result.passedTo}.`
+          : `You declined ${issue.ref}. The staff manager will assign it to someone else.`,
+      ),
+    confirmAcceptedByPhone: (issue) =>
+      save(
+        () => apiAcceptedByPhone(issue.id),
+        ISSUE_TOPICS,
+        `Recorded: ${issue.assignedToName ?? staff.find((s) => s.id === issue.assignedTo)?.name ?? 'the technician'} accepted ${issue.ref} over the phone.`,
+      ),
+    updateAvailability: (tech, action, extra = {}) => {
+      const steps = {
+        clockIn: [() => apiStaffClockIn(tech.id), `${tech.name} is clocked in and can get new jobs.`],
+        clockOut: [() => apiStaffClockOut(tech.id, extra.handBack ?? []), `${tech.name} is clocked out.`],
+        startBreak: [() => apiStaffBreak(tech.id, extra.minutes ?? 15), `${tech.name} is on a ${extra.minutes ?? 15}-minute break.`],
+        endBreak: [() => apiStaffEndBreak(tech.id), `${tech.name} is back from break.`],
+      } as const
+      const [call, message] = steps[action]
+      return save(call, ['staff', 'issues', 'notifications'], message)
+    },
     addUser: (user) => save(() => apiAddUser(user), ['users', 'staff'], `${user.name} has been added.`),
     editUser: (userId, details) => {
       const name = users.find((u) => u.id === userId)?.name ?? 'User'

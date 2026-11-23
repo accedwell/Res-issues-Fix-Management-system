@@ -18,6 +18,7 @@ import {
   reportNotFixed,
   updateProgress,
 } from "../services/issueWorkflow.js";
+import { acceptJob, confirmAcceptedByPhone, declineJob } from "../services/jobAcceptance.js";
 import { getPhoto } from "../store/issues.js";
 import { listBlocks } from "../store/settings.js";
 import { getUser } from "../store/users.js";
@@ -39,6 +40,9 @@ async function present(req: Request, issue: Issue, chats?: ChatSummaries) {
     ...issue,
     ...(hideStudent ? { studentId: "", studentName: "" } : {}),
     assignedToName: staff?.name ?? null,
+    // The supervisor, staff manager and system admin can phone the technician; students and
+    // other technicians never get the number.
+    ...(["admin", "supervisor", "sysadmin"].includes(currentUser(req).role) ? { assignedToPhone: staff?.phone ?? null } : {}),
     chat,
   };
 }
@@ -180,26 +184,45 @@ issuesRouter.delete("/:id", requireRole("student"), async (req, res) => {
 });
 
 // POST /api/issues/:id/receive — admin acknowledges a new report.
-issuesRouter.post("/:id/receive", requireRole("admin"), async (req, res) => {
+issuesRouter.post("/:id/receive", requireRole("admin", "supervisor"), async (req, res) => {
   res.json({ issue: await present(req, await receiveIssue(param(req.params.id))) });
 });
 
 // GET /api/issues/:id/recommended-staff — who the system would assign, plus everyone's workload.
-issuesRouter.get("/:id/recommended-staff", requireRole("admin"), async (req, res) => {
+issuesRouter.get("/:id/recommended-staff", requireRole("supervisor"), async (req, res) => {
   const issue = await getIssueFor(currentUser(req), param(req.params.id));
   res.json({ recommended: (await recommendStaff(issue)) ?? null, staff: await staffWorkload() });
 });
 
 // POST /api/issues/:id/assign — { staffId?, priority? }. Leave out staffId to auto-assign by job.
-issuesRouter.post("/:id/assign", requireRole("admin"), async (req, res) => {
+// Only the supervisor assigns people; the staff manager can no longer.
+issuesRouter.post("/:id/assign", requireRole("supervisor"), async (req, res) => {
   const body = req.body ?? {};
   const staffId = optionalString(body, "staffId");
   const priority = body.priority === undefined ? undefined : requireOneOf<Priority>(body, "priority", PRIORITIES);
   res.json({ issue: await present(req, await assignIssue(param(req.params.id), staffId, priority)) });
 });
 
+// POST /api/issues/:id/accept — the assigned technician accepts the job.
+issuesRouter.post("/:id/accept", requireRole("maintenance"), async (req, res) => {
+  res.json({ issue: await present(req, await acceptJob(currentUser(req), param(req.params.id))) });
+});
+
+// POST /api/issues/:id/decline — { reason } the assigned technician turns the job down.
+// It goes to someone else on duty, so the technician may no longer see it: only who got it is returned.
+issuesRouter.post("/:id/decline", requireRole("maintenance"), async (req, res) => {
+  const reason = requireString(req.body ?? {}, "reason", "Reason").slice(0, 300);
+  const issue = await declineJob(currentUser(req), param(req.params.id), reason);
+  res.json({ ok: true, passedTo: issue.assignedTo ? ((await getUser(issue.assignedTo))?.name ?? null) : null });
+});
+
+// POST /api/issues/:id/accepted-by-phone — the supervisor or system admin phoned the technician, who accepted.
+issuesRouter.post("/:id/accepted-by-phone", requireRole("supervisor", "sysadmin"), async (req, res) => {
+  res.json({ issue: await present(req, await confirmAcceptedByPhone(currentUser(req), param(req.params.id))) });
+});
+
 // POST /api/issues/:id/progress — { status: "In Progress" | "Not Resolved" | "Resolved", note? }. "Not Resolved" needs a note.
-issuesRouter.post("/:id/progress", requireRole("maintenance", "admin"), async (req, res) => {
+issuesRouter.post("/:id/progress", requireRole("maintenance", "admin", "supervisor"), async (req, res) => {
   const body = req.body ?? {};
   const status = requireOneOf(body, "status", PROGRESS_STATUSES);
   const issue = await updateProgress(currentUser(req), param(req.params.id), status, optionalString(body, "note"));

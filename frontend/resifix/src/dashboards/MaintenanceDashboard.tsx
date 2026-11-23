@@ -4,17 +4,21 @@ import { EmptyState, IssueRow } from '../components/common'
 import { DutyCard } from '../components/DutyCard'
 import { useApp } from '../context/appContext'
 import { issuesInPeriod, monthPeriod } from '../periodReport'
-import { formatDate, isOpen, stop } from '../utils'
+import { awaitingAcceptance, formatDate, isOpen, stop } from '../utils'
 import type { Issue } from '../types'
 
 export function MaintenanceDashboard({ tab }: { tab: string }) {
-  const { issues, setModal } = useApp()
+  const { issues, setModal, acceptJob } = useApp()
+  const [accepting, setAccepting] = useState('')
   if (tab === 'reports') return <MyWorkReport issues={issues} />
   if (tab === 'parts') return <PartsStore />
 
   const completed = tab === 'completed'
   // The server only sends maintenance staff the jobs assigned to them.
-  const tasks = issues.filter((i) => (completed ? !isOpen(i) : isOpen(i)))
+  // New jobs waiting to be accepted come first.
+  const tasks = issues
+    .filter((i) => (completed ? !isOpen(i) : isOpen(i)))
+    .sort((a, b) => Number(awaitingAcceptance(b)) - Number(awaitingAcceptance(a)))
 
   return (
     <>
@@ -29,6 +33,23 @@ export function MaintenanceDashboard({ tab }: { tab: string }) {
             extra={
               completed ? (
                 <span className="status-pill status-closed">Done</span>
+              ) : awaitingAcceptance(issue) ? (
+                <span className="accept-actions">
+                  <button className="btn btn-ghost btn-sm" onClick={stop(() => setModal({ type: 'decline', issueId: issue.id }))}>
+                    Decline
+                  </button>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={accepting === issue.id}
+                    onClick={stop(async () => {
+                      setAccepting(issue.id)
+                      await acceptJob(issue)
+                      setAccepting('')
+                    })}
+                  >
+                    {accepting === issue.id ? 'Saving…' : 'Accept'}
+                  </button>
+                </span>
               ) : (
                 <button className="btn btn-navy btn-sm" onClick={stop(() => setModal({ type: 'update', issueId: issue.id }))}>
                   Update

@@ -19,6 +19,7 @@ function toUser(row: UserRow): User {
     ...(row.block ? { block: row.block.name } : {}),
     ...(row.roomNumber ? { room: row.roomNumber } : {}),
     ...(row.specialization ? { specialization: row.specialization } : {}),
+    ...(row.phone ? { phone: row.phone } : {}),
   };
 }
 
@@ -64,6 +65,7 @@ export async function insertUser(user: User): Promise<User> {
       studentNumber: user.studentNumber ?? null,
       roomNumber: user.room ?? null,
       specialization: user.specialization ?? null,
+      phone: user.phone ?? null,
       blockId: block?.id ?? null,
       createdAt: new Date(user.createdAt),
     },
@@ -72,8 +74,11 @@ export async function insertUser(user: User): Promise<User> {
   return toUser(row);
 }
 
-// The details the system administrator may correct: a student's block and room, a staff member's job.
-export async function updateUserDetails(id: string, details: { block?: string; room?: string; specialization?: string }): Promise<User> {
+// The details the system administrator may correct: a student's block and room, a staff member's job and phone.
+export async function updateUserDetails(
+  id: string,
+  details: { block?: string; room?: string; specialization?: string; phone?: string | null },
+): Promise<User> {
   const block = details.block ? await prisma.residenceBlock.findUnique({ where: { name: details.block } }) : null;
   const row = await prisma.user.update({
     where: { id },
@@ -81,6 +86,7 @@ export async function updateUserDetails(id: string, details: { block?: string; r
       ...(block ? { blockId: block.id } : {}),
       ...(details.room !== undefined ? { roomNumber: details.room } : {}),
       ...(details.specialization !== undefined ? { specialization: details.specialization } : {}),
+      ...(details.phone !== undefined ? { phone: details.phone } : {}),
     },
     include: withBlock,
   });

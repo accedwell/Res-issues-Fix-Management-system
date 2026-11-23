@@ -5,6 +5,7 @@ import {
   allSchedules, listLeave, localDay, minutesOfDay, minutesOfTime, onLeaveOn, worksOn, type Schedule,
 } from "../store/schedules.js";
 import { listUsers } from "../store/users.js";
+import { managersAndSupervisors } from "./issueWorkflow.js";
 
 // Attendance for maintenance technicians: who has not clocked in yet, and the monthly report.
 
@@ -18,7 +19,7 @@ export async function alertMissingClockIns(): Promise<number> {
   const now = minutesOfDay(new Date());
   const [staff, managers, shifts, leave] = await Promise.all([
     listUsers("maintenance"),
-    listUsers("admin"),
+    managersAndSupervisors(),
     openShifts(),
     listLeave({ from: day, to: day }),
   ]);

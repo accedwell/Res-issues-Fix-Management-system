@@ -33,29 +33,38 @@ export async function getIssueFor(user: User, id: string): Promise<Issue> {
 
 // ===== Helpers =====
 
-function withStatus(issue: Issue, status: Status, note: string): Partial<Issue> {
+export function withStatus(issue: Issue, status: Status, note: string): Partial<Issue> {
   return { status, history: [...issue.history, { status, date: today(), at: new Date().toISOString(), note }] };
 }
 
 // Key updates (assigned, resolved, re-opened) always reach the student.
 // Other status changes only do when the "Auto-notify students" setting is on.
-async function notifyStudent(issue: Issue, message: string, important = false) {
+export async function notifyStudent(issue: Issue, message: string, important = false) {
   if (important || (await isSettingOn("notify"))) await addNotification(issue.studentId, message, issue.id);
 }
 
-// Every residence administrator gets these (new reports, fixes, re-opened jobs).
-async function notifyAdmins(issue: Issue, message: string) {
-  for (const admin of await listUsers("admin")) await addNotification(admin.id, message, issue.id);
+// The staff manager and the supervisors, who both follow the jobs.
+export const managersAndSupervisors = async () => [...(await listUsers("admin")), ...(await listUsers("supervisor"))];
+
+// The staff manager and the supervisors get these (new reports, fixes, re-opened and declined jobs).
+export async function notifyAdmins(issue: Issue, message: string) {
+  for (const admin of await managersAndSupervisors()) await addNotification(admin.id, message, issue.id);
 }
 
-// A report that is waiting because nobody has clocked in. Urgent ones can't wait, so the staff
-// manager is told straight away to call someone in. Others go out when the next technician clocks in.
+// A report that is waiting because nobody has clocked in. The student is told it is waiting and that
+// they will hear who has it once someone clocks in. Urgent ones can't wait, so the staff manager is
+// also told straight away to call someone in. Others go out when the next technician clocks in.
 export async function alertNobodyOnDuty(issue: Issue) {
+  await notifyStudent(
+    issue,
+    `${issue.ref} is waiting for a technician: nobody is on duty right now. It will be assigned as soon as someone clocks in, and you will be told who.`,
+    true,
+  );
   if (issue.priority !== "Urgent") return;
   await notifyAdmins(issue, `URGENT ${issue.ref} — ${issue.title} is waiting: no technician is on duty. Please call someone in or assign it.`);
 }
 
-async function notifyStaff(issue: Issue, message: string) {
+export async function notifyStaff(issue: Issue, message: string) {
   if (issue.assignedTo) await addNotification(issue.assignedTo, message, issue.id);
 }
 
@@ -160,7 +169,7 @@ export async function editReport(student: User, id: string, changes: ReportChang
 export async function cancelReport(student: User, id: string): Promise<void> {
   const issue = await ownSubmittedReport(student, id);
   await deleteIssue(id);
-  for (const admin of await listUsers("admin")) {
+  for (const admin of await managersAndSupervisors()) {
     await addNotification(admin.id, `${issue.ref} — ${issue.title} was cancelled by the student.`);
   }
 }
@@ -175,14 +184,14 @@ export async function receiveIssue(id: string): Promise<Issue> {
   return updated;
 }
 
-// Admin assigns maintenance staff. Without a staffId, the system picks the best match for the job.
+// The supervisor assigns maintenance staff. Without a staffId, the system picks the best match for the job.
 // assignedBy says who did it in the report's history ("by the staff manager" unless the assistant did it).
 // onDutyOnly (automatic assigning) only picks technicians who have clocked in.
 export async function assignIssue(
   id: string,
   staffId?: string,
   priority?: Priority,
-  assignedBy = "by the staff manager",
+  assignedBy = "by the supervisor",
   onDutyOnly = false,
 ): Promise<Issue> {
   const issue = await getIssue(id);
@@ -204,11 +213,13 @@ export async function assignIssue(
   const note = `Assigned to ${staff.name} (${staff.specialization}) ${assignedBy}.`;
   const updated = await updateIssue(id, {
     assignedTo: staff.id,
+    // Every new assignment waits for the technician to accept it (see jobAcceptance.ts).
+    acceptedAt: null,
     priority: priority ?? issue.priority,
     ...withStatus(issue, "Assigned", note),
   });
-  await notifyStudent(updated, `${issue.ref} has been assigned to ${staff.name}.`, true);
-  await notifyStaff(updated, `New job: ${issue.ref} — ${issue.title} (${issue.residence}, ${issue.room}).`);
+  await notifyStudent(updated, `${issue.ref} has been assigned to ${staff.name}. Waiting for them to accept the job.`, true);
+  await notifyStaff(updated, `New job: ${issue.ref} — ${issue.title} (${issue.residence}, ${issue.room}). Please accept or decline it.`);
   return updated;
 }
 
@@ -221,6 +232,7 @@ export async function handBackJob(user: User, id: string): Promise<Issue> {
   if (DONE_STATUSES.includes(issue.status)) throw badRequest("This issue is already resolved or closed");
   const updated = await updateIssue(id, {
     assignedTo: null,
+    acceptedAt: null,
     ...withStatus(issue, "Received", `Handed back by ${user.name} when clocking out. Waiting for someone else.`),
   });
   const urgent = issue.priority === "Urgent" ? "URGENT " : "";
@@ -242,7 +254,9 @@ export async function updateProgress(user: User, id: string, status: Status, not
   if (status === "Not Resolved" && !note?.trim()) throw badRequest("Please add a comment explaining why it could not be resolved");
 
   const text = note || (status === "Resolved" ? "Issue marked as resolved." : "Progress updated.");
-  const updated = await updateIssue(id, withStatus(issue, status, text));
+  // Starting work on a job that was never accepted counts as accepting it.
+  const accepting = user.role === "maintenance" && !issue.acceptedAt ? { acceptedAt: new Date().toISOString() } : {};
+  const updated = await updateIssue(id, { ...accepting, ...withStatus(issue, status, text) });
   if (status === "Not Resolved") {
     await notifyStudent(updated, `${issue.ref} could not be resolved yet: ${text}`, true);
     await notifyAdmins(updated, `${issue.ref} — ${issue.title} was marked Not Resolved by ${user.name}: ${text}`);

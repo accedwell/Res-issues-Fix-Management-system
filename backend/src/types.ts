@@ -1,10 +1,11 @@
-export type Role = "student" | "admin" | "maintenance" | "sysadmin";
+// "admin" is the staff manager. The supervisor assigns jobs to technicians.
+export type Role = "student" | "admin" | "maintenance" | "sysadmin" | "supervisor";
 
 export type Status = "Submitted" | "Received" | "Assigned" | "In Progress" | "Not Resolved" | "Resolved" | "Closed";
 
 export type Priority = "Low" | "Normal" | "High" | "Urgent";
 
-export const ROLES: Role[] = ["student", "admin", "maintenance", "sysadmin"];
+export const ROLES: Role[] = ["student", "admin", "maintenance", "sysadmin", "supervisor"];
 export const STATUSES: Status[] = ["Submitted", "Received", "Assigned", "In Progress", "Not Resolved", "Resolved", "Closed"];
 export const PRIORITIES: Priority[] = ["Low", "Normal", "High", "Urgent"];
 export const DONE_STATUSES: Status[] = ["Resolved", "Closed"];
@@ -27,6 +28,8 @@ export interface User {
   room?: string;
   // Maintenance staff
   specialization?: string;
+  // Staff: the number the supervisor calls, e.g. when a job is not accepted. Never sent to students.
+  phone?: string;
 }
 
 // What the API sends back — never includes the password hash.
@@ -71,6 +74,9 @@ export interface Issue {
   history: HistoryEntry[];
   feedback: Feedback | null;
   reopened: number;
+  // When it was last assigned, and when the technician accepted it (null while waiting for them to accept).
+  assignedAt?: string | null;
+  acceptedAt?: string | null;
   // Only on reports filed with the AI assistant: its notes for maintenance (likely cause, what to bring).
   assistantNotes?: string;
 }

@@ -43,11 +43,21 @@ export interface AppState {
   updateProgress: (issue: Issue, status: Status, note: string) => Promise<boolean>
   confirmResolution: (issue: Issue, rating: number | null, comment: string) => Promise<boolean>
   reportNotFixed: (issue: Issue, reason: string) => Promise<boolean>
+  // Maintenance: accept or turn down a job assigned to them. Staff manager: record it was accepted by phone.
+  acceptJob: (issue: Issue) => Promise<boolean>
+  declineJob: (issue: Issue, reason: string) => Promise<boolean>
+  confirmAcceptedByPhone: (issue: Issue) => Promise<boolean>
+  // Supervisor / system admin: clock a technician in or out, or start / end their break, for them.
+  updateAvailability: (
+    tech: Staff,
+    action: 'clockIn' | 'clockOut' | 'startBreak' | 'endBreak',
+    extra?: { minutes?: number; handBack?: string[] },
+  ) => Promise<boolean>
   editReport: (issue: Issue, changes: Omit<NewIssue, 'photo'>) => Promise<boolean>
   cancelReport: (issue: Issue) => Promise<boolean>
   addUser: (user: NewUserInput) => Promise<boolean>
   removeUser: (userId: string) => Promise<boolean>
-  editUser: (userId: string, details: { block?: string; room?: string; specialization?: string }) => Promise<boolean>
+  editUser: (userId: string, details: { block?: string; room?: string; specialization?: string; phone?: string }) => Promise<boolean>
   addCategory: (name: string, icon: string) => Promise<boolean>
   editCategory: (key: string, name: string, icon: string) => Promise<boolean>
   removeCategory: (key: string) => Promise<boolean>

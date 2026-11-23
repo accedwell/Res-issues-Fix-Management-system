@@ -269,8 +269,11 @@ function TodayCard({ shifts }: { shifts: DutyShift[] }) {
                 {s.onBreak && <span className="timing-tag info">On break</span>}
               </span>
               <span className="duty-times">
-                In {formatTime(s.clockInAt)} ·{' '}
-                {s.clockOutAt ? `Out ${formatTime(s.clockOutAt)}${s.autoClosed ? ' (by the system)' : ''}` : 'still on duty'}
+                In {formatTime(s.clockInAt)}
+                {s.clockedInBy ? ` (by ${s.clockedInBy})` : ''} ·{' '}
+                {s.clockOutAt
+                  ? `Out ${formatTime(s.clockOutAt)}${s.autoClosed ? ' (by the system)' : s.clockedOutBy ? ` (by ${s.clockedOutBy})` : ''}`
+                  : 'still on duty'}
                 {s.breakMinutes > 0 && ` · breaks ${span(s.breakMinutes)}`}
               </span>
             </li>

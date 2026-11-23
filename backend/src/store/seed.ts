@@ -16,11 +16,12 @@ export function createSeedData(): Data {
       user({ id: "stu-1", name: "Naledi Mahlangu", email: "naledi@resStudent.ac.za", role: "student", studentNumber: "22045678", block: "Block A", room: "204" }),
       user({ id: "stu-2", name: "Karabo Sithole", email: "karabo.s@resStudent.ac.za", role: "student", studentNumber: "22051234", block: "Block C", room: "12" }),
       user({ id: "adm-1", name: "Palesa Mokgadi", email: "mokgadi@resStaff.ac.za", role: "admin" }),
-      user({ id: "stf-1", name: "Thabo Nkosi", email: "t.nkosi@resStaff.ac.za", role: "maintenance", specialization: "Plumbing" }),
-      user({ id: "stf-2", name: "Lindiwe Mokoena", email: "l.mokoena@resStaff.ac.za", role: "maintenance", specialization: "Electrical" }),
-      user({ id: "stf-3", name: "Sipho Dlamini", email: "s.dlamini@resStaff.ac.za", role: "maintenance", specialization: "General Maintenance" }),
-      user({ id: "stf-4", name: "Ayanda Khumalo", email: "a.khumalo@resStaff.ac.za", role: "maintenance", specialization: "IT / Wi-Fi" }),
+      user({ id: "stf-1", name: "Thabo Nkosi", email: "t.nkosi@resStaff.ac.za", role: "maintenance", specialization: "Plumbing", phone: "082 555 0101" }),
+      user({ id: "stf-2", name: "Lindiwe Mokoena", email: "l.mokoena@resStaff.ac.za", role: "maintenance", specialization: "Electrical", phone: "082 555 0102" }),
+      user({ id: "stf-3", name: "Sipho Dlamini", email: "s.dlamini@resStaff.ac.za", role: "maintenance", specialization: "General Maintenance", phone: "082 555 0103" }),
+      user({ id: "stf-4", name: "Ayanda Khumalo", email: "a.khumalo@resStaff.ac.za", role: "maintenance", specialization: "IT / Wi-Fi", phone: "082 555 0104" }),
       user({ id: "sys-1", name: "System Administrator", email: "sysadmin@resStaff.ac.za", role: "sysadmin" }),
+      user({ id: "sup-1", name: "Kagiso Molefe", email: "supervisor@resStaff.ac.za", role: "supervisor" }),
     ],
 
     issues: [

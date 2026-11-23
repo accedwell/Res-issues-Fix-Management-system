@@ -48,6 +48,7 @@ function spotlightNote(issue: Issue) {
   const fixer = issue.assignedToName
   if (issue.status === 'Resolved') return `${fixer ? 'Fixed by ' + fixer : 'Marked as fixed'}. Tap to confirm it worked.`
   if (issue.status === 'Not Resolved') return `${fixer ?? 'Maintenance'} could not fix it yet. Tap to see why.`
+  if (fixer && !issue.acceptedAt) return `Assigned to ${fixer}. Waiting for them to accept the job.`
   if (fixer) return `${fixer} is on it.`
   return 'Waiting for a fixer to be assigned.'
 }

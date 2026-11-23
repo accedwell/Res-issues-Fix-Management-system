@@ -46,6 +46,18 @@ export function optionalString(body: Body, field: string): string | undefined {
   return value.trim();
 }
 
+// A phone number to call someone on: digits with optional +, spaces, dashes or brackets, 10 to 15
+// digits long. "" clears it (null); leaving it out changes nothing (undefined).
+export function optionalPhone(body: Body, field = "phone"): string | null | undefined {
+  const value = body[field];
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !/^\+?[\d\s()-]+$/.test(value.trim())) throw badRequest("Phone number can only contain digits, spaces and +");
+  const digits = value.replace(/\D/g, "").length;
+  if (digits < 10 || digits > 15) throw badRequest("Phone number must have 10 to 15 digits, e.g. 082 555 0101");
+  return value.trim().replace(/\s+/g, " ");
+}
+
 export function requireOneOf<T extends string>(body: Body, field: string, allowed: readonly T[]): T {
   const value = body[field];
   if (typeof value !== "string" || !allowed.includes(value as T)) {

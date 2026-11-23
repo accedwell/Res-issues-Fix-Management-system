@@ -21,6 +21,7 @@ import { alertOverdueReports } from "./services/issueWorkflow.js";
 import { tellManagers } from "./routes/duty.js";
 import { runAutoAssign } from "./lib/autoAssign.js";
 import { alertMissingClockIns } from "./services/attendance.js";
+import { alertUnacceptedJobs } from "./services/jobAcceptance.js";
 import { closeForgottenShifts, endFinishedBreaks, MAX_SHIFT_HOURS } from "./store/duty.js";
 import { clockTime } from "./store/schedules.js";
 import { getUser } from "./store/users.js";
@@ -108,6 +109,20 @@ const checkOverdue = () =>
     .catch((err) => console.error("Overdue check failed:", err));
 void checkOverdue();
 setInterval(checkOverdue, 60 * 1000);
+
+// Every 30 seconds: a job not accepted within 2 minutes alerts the staff manager and the system admin
+// (once per assignment), so they can phone the technician.
+const checkUnaccepted = () =>
+  alertUnacceptedJobs()
+    .then((sent) => {
+      if (sent) {
+        console.log(`Sent ${sent} not-accepted job alert(s).`);
+        broadcast(["notifications", "issues"]);
+      }
+    })
+    .catch((err) => console.error("Job acceptance check failed:", err));
+void checkUnaccepted();
+setInterval(checkUnaccepted, 30 * 1000);
 
 // Every minute, for clock-in:
 //  - technicians who forgot to clock out are clocked out after MAX_SHIFT_HOURS, so someone who went

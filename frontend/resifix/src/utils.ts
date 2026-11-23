@@ -20,6 +20,41 @@ export const stop = (action: () => void) => (e: MouseEvent) => {
 
 export const isOpen = (issue: Issue) => !DONE_STATUSES.includes(issue.status)
 
+// A link that dials a phone number: "082 555 0101" → "tel:0825550101" (keeps a leading +).
+export const telHref = (phone: string) => 'tel:' + phone.replace(/[^\d+]/g, '')
+
+// A technician has this long to accept a new job before the staff manager is told to call them (same as the server).
+export const ACCEPT_WITHIN_MINUTES = 2
+
+// Who gave a job to its current technician, from the latest "Assigned to …" history note.
+// The auto-assigner, the AI report assistant and re-assigning after a decline all say "automatically".
+export function assignmentSource(issue: Issue): { bySystem: boolean; detail: string } {
+  const note = [...issue.history].reverse().find((h) => h.status === 'Assigned' && h.note.startsWith('Assigned to'))?.note ?? ''
+  const declined = note.match(/automatically after (.+) declined/)
+  if (declined) return { bySystem: true, detail: `After ${declined[1]} declined` }
+  if (/automatically by the ResiFix assistant/i.test(note)) return { bySystem: true, detail: 'AI report assistant' }
+  if (/automatically/i.test(note)) return { bySystem: true, detail: 'Auto-assigner' }
+  return { bySystem: false, detail: 'Chosen by hand' }
+}
+
+// "just now", "5 min ago", "3 h ago", "2 days ago".
+export function timeAgo(iso: string): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60_000))
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} h ago`
+  const days = Math.floor(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
+// Assigned, but the technician has not accepted it yet.
+export const awaitingAcceptance = (issue: Issue) => isOpen(issue) && !!issue.assignedTo && !issue.acceptedAt
+
+// Waiting to be accepted for longer than ACCEPT_WITHIN_MINUTES: the staff manager should phone them.
+export const notAcceptedInTime = (issue: Issue) =>
+  awaitingAcceptance(issue) && !!issue.assignedAt && Date.now() - Date.parse(issue.assignedAt) >= ACCEPT_WITHIN_MINUTES * 60_000
+
 const DAY_MS = 24 * 60 * 60 * 1000
 
 // Total age of the original report, for workload summaries.
@@ -45,6 +80,7 @@ export const isForUser = (n: AppNotification, auth: Auth) =>
 export function matchesView(issue: Issue, view: string): boolean {
   if (view === 'open') return isOpen(issue)
   if (view === 'unassigned') return isOpen(issue) && !issue.assignedTo
+  if (view === 'unaccepted') return awaitingAcceptance(issue)
   if (view === 'urgent') return isOpen(issue) && issue.priority === 'Urgent'
   if (view === 'overdue') return isOverdue(issue)
   if (view === 'reopened') return (issue.reopened ?? 0) > 0

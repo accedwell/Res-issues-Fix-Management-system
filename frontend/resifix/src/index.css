@@ -889,6 +889,46 @@ button.st-banner-card:hover { transform: translateY(-3px); border-color: rgba(95
 .search-results > .btn { align-self: flex-start; margin-top: 4px; }
 
 /* Why maintenance could not fix a job: a line on the report row, and a box in its details. */
+.accept-tag { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 800; vertical-align: 2px; }
+.accept-tag.new, .accept-tag.waiting { background: var(--warn-bg); color: var(--warn); }
+.accept-tag.late { background: var(--bad-bg); color: var(--bad); }
+.accept-actions { display: inline-flex; gap: 6px; }
+.phone-call-btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; white-space: nowrap; }
+.phone-call-btn svg { width: 14px; height: 14px; }
+.call-missing { font-size: 11.5px; color: var(--ink-soft); }
+.accept-box .phone-call-btn { justify-self: start; margin-top: 6px; }
+.phone-link { color: var(--mint-soft); font-weight: 700; text-decoration: none; }
+.phone-link:hover { text-decoration: underline; }
+.seg { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 12px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--border-soft); }
+.seg-btn { font: inherit; font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 9px; border: 0; background: transparent; color: var(--ink-soft); cursor: pointer; }
+.seg-btn:hover { color: var(--ink); }
+.seg-btn.on { background: var(--grad-brand); color: #04122b; }
+.avail-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.avail-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, .03); border: 1px solid var(--border-soft); }
+.avail-main { display: grid; gap: 3px; min-width: 0; }
+.avail-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; }
+.avail-status .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.avail-status.ok { color: var(--mint-soft); }
+.avail-status.info { color: var(--warn); }
+.avail-status.off { color: var(--ink-soft); }
+.avail-status small { font-weight: 600; color: var(--ink-soft); }
+.avail-actions, .avail-break { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .avail-row { grid-template-columns: auto 1fr; }
+  .avail-actions { grid-column: 1 / -1; justify-content: flex-start; }
+}
+.assign-tile { text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.assign-tile.active { border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+.assign-row { cursor: pointer; }
+.assign-row:hover td { background: rgba(255, 255, 255, .03); }
+.assign-table td { vertical-align: top; }
+.assign-job, .assign-accept { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.assign-job .ref { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+.assign-source { display: block; font-weight: 700; white-space: nowrap; }
+.assign-source.system { color: var(--mint-soft); }
+.accept-box { display: grid; gap: 3px; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; background: var(--warn-bg); border: 1px solid rgba(246, 189, 85, .45); }
+.accept-box.late { background: var(--bad-bg); border-color: var(--bad); }
+.accept-box span { color: var(--ink-soft); }
 .not-resolved-note { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 12px; font-weight: 600; color: var(--bad); }
 .not-resolved-note svg { width: 13px; height: 13px; flex: 0 0 auto; }
 .not-resolved-box { margin: 0 0 14px; padding: 12px 14px; border-radius: var(--r); background: var(--bad-bg); border: 1px solid rgba(255, 122, 122, .3); }
