@@ -1,12 +1,7 @@
-import { createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import prisma from "../lib/prisma.js";
-import { localDay } from "./schedules.js";
 
-// Clock-in for maintenance technicians. A QR code at the maintenance office holds the clock-in
-// code; scanning it (or typing the code under it) marks the technician on duty. Two ways to show it:
-//  - "daily":    a printed code that changes every day, so yesterday's photo is useless.
-//  - "rotating": a screen at the office (the wall screen) showing a code that changes every 30
-//                seconds, so a photo of it is useless within two minutes.
+// Clock-in for maintenance technicians: a shift runs from pressing "Clock in" to clocking out.
+// Only technicians on duty and not on a break get new jobs automatically.
 
 export interface DutyShift {
   id: string;
@@ -20,18 +15,6 @@ export interface DutyShift {
   clockedInBy: string | null;
   clockedOutBy: string | null;
 }
-
-export type CodeMode = "daily" | "rotating";
-
-const CODE_KEY = "_clock_in_code";
-const MODE_KEY = "_clock_in_mode";
-const SECRET_KEY = "_clock_in_secret";
-// No 0/O or 1/I/L, so the code is easy to read and type.
-const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const CODE_LENGTH = 6;
-// Wall screen: a new code every 30 s; one stays valid for 2 minutes (time to scan and log in).
-export const ROTATE_SECONDS = 30;
-const ROTATE_VALID_WINDOWS = 4;
 
 // Someone who forgets to clock out is clocked out after this many hours.
 export const MAX_SHIFT_HOURS = 12;
@@ -59,88 +42,6 @@ const toShift = (row: ShiftRow): DutyShift => ({
   clockedInBy: row.clockedInBy,
   clockedOutBy: row.clockedOutBy,
 });
-
-async function saveSetting(key: string, value: string, description: string) {
-  await prisma.systemSetting.upsert({ where: { key }, create: { key, value, description }, update: { value } });
-}
-const readSetting = async (key: string) => (await prisma.systemSetting.findUnique({ where: { key } }))?.value;
-
-const newCode = () => Array.from({ length: CODE_LENGTH }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
-
-// ===== Which kind of code =====
-
-export async function getCodeMode(): Promise<CodeMode> {
-  return (await readSetting(MODE_KEY)) === "rotating" ? "rotating" : "daily";
-}
-
-export const setCodeMode = (mode: CodeMode) => saveSetting(MODE_KEY, mode, "Clock-in code mode");
-
-// ===== Printed daily code =====
-
-async function saveDailyCode(code: string, day: string) {
-  await saveSetting(CODE_KEY, JSON.stringify({ code, day }), "Today's clock-in code");
-  return { code, day };
-}
-
-export async function getDailyCode(): Promise<{ code: string; day: string }> {
-  const day = localDay();
-  try {
-    const saved = JSON.parse((await readSetting(CODE_KEY)) ?? "{}") as { code?: string; day?: string };
-    if (saved.code && saved.day === day) return { code: saved.code, day };
-  } catch {
-    // A damaged value is simply replaced.
-  }
-  return saveDailyCode(newCode(), day);
-}
-
-// Replaces today's code straight away, e.g. when the manager thinks a photo of it got out. In
-// wall-screen mode it also changes the secret, so every recent screen code stops working too.
-export async function renewCodes(): Promise<void> {
-  await saveDailyCode(newCode(), localDay());
-  await saveSetting(SECRET_KEY, randomBytes(32).toString("hex"), "Clock-in screen secret");
-}
-
-// ===== Wall-screen code (changes every 30 seconds) =====
-
-async function screenSecret(): Promise<string> {
-  const saved = await readSetting(SECRET_KEY);
-  if (saved) return saved;
-  const secret = randomBytes(32).toString("hex");
-  await saveSetting(SECRET_KEY, secret, "Clock-in screen secret");
-  return secret;
-}
-
-function codeForWindow(secret: string, window: number): string {
-  const bytes = createHmac("sha256", secret).update(`clock-in:${window}`).digest();
-  return Array.from({ length: CODE_LENGTH }, (_, i) => ALPHABET[bytes[i] % ALPHABET.length]).join("");
-}
-
-const currentWindow = () => Math.floor(Date.now() / 1000 / ROTATE_SECONDS);
-
-// The code to show now, and when the screen should show the next one.
-export async function getScreenCode(): Promise<{ code: string; changesAt: string }> {
-  const window = currentWindow();
-  return { code: codeForWindow(await screenSecret(), window), changesAt: new Date((window + 1) * ROTATE_SECONDS * 1000).toISOString() };
-}
-
-// ===== Checking a scanned or typed code =====
-
-const sameCode = (a: string, b: string) => {
-  const x = Buffer.from(a);
-  const y = Buffer.from(b);
-  return x.length === y.length && timingSafeEqual(x, y);
-};
-
-// Whether a code is valid right now. Spaces and letter case don't matter.
-export async function isClockInCodeValid(input: string): Promise<boolean> {
-  const given = input.replace(/\s+/g, "").toUpperCase();
-  if ((await getCodeMode()) === "daily") return sameCode(given, (await getDailyCode()).code);
-  const secret = await screenSecret();
-  const now = currentWindow();
-  let ok = false;
-  for (let w = now; w > now - ROTATE_VALID_WINDOWS; w--) ok = sameCode(given, codeForWindow(secret, w)) || ok;
-  return ok;
-}
 
 // ===== Shifts =====
 

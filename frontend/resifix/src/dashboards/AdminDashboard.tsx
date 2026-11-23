@@ -716,7 +716,8 @@ const NO_SEARCH = { text: '', category: 'all', block: 'all', staff: 'all' }
 // How many matching issues to list under the search before "Show all".
 const RESULTS_SHOWN = 5
 
-function Reports() {
+// The Reports page: the staff manager and the supervisor both use it.
+export function Reports() {
   const { issues: all, categories, staff, catInfo } = useApp()
   // Searching narrows every section on this page, the period report and the downloads.
   const [search, setSearch] = useState(NO_SEARCH)

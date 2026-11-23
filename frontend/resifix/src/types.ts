@@ -36,7 +36,7 @@ export interface Staff {
   specialization: string
   // Unfinished jobs, as counted by the server.
   openJobs: number
-  // Clocked in with the QR code, and since when. Only on-duty technicians get new jobs automatically.
+  // Clocked in, and since when. Only on-duty technicians get new jobs automatically.
   onDuty: boolean
   onDutySince: string | null
   // Clocked in but on a break until breakUntil: no new jobs.
@@ -45,7 +45,7 @@ export interface Staff {
   onLeaveToday: boolean
   // On duty and not on a break.
   available: boolean
-  // The supervisor / system admin who clocked them in for them; null when they scanned in themselves.
+  // The supervisor / system admin who clocked them in for them; null when they clocked in themselves.
   clockedInBy?: string | null
   // Number to call them on, when the system admin has saved one.
   phone?: string | null
@@ -106,16 +106,6 @@ export interface DutyShift {
   // Who did it for them (supervisor / system admin); null when they did it themselves.
   clockedInBy?: string | null
   clockedOutBy?: string | null
-}
-
-// The code to show at the office: the printed daily code, or the wall screen's 30-second code.
-export interface ClockCode {
-  mode: 'daily' | 'rotating'
-  code: string
-  day: string
-  // Wall screen only: when the next code appears.
-  changesAt: string | null
-  rotateSeconds: number
 }
 
 // What the staff manager's Clock-in page needs about hours and leave.

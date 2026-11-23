@@ -1143,7 +1143,7 @@ button.mix-row { cursor: pointer; }
   .mix-donut { max-width: 190px; margin: 0 auto; }
 }
 
-/* ===== Clock-in (QR code) ===== */
+/* ===== Clock-in ===== */
 /* Technician's on/off duty card at the top of "Assigned to Me". */
 .duty-card { display: flex; align-items: center; gap: 14px; padding: 16px 18px; }
 .duty-card.on { border-color: rgba(63, 217, 160, .35); background: linear-gradient(90deg, var(--good-bg), var(--panel) 60%); }
@@ -1154,28 +1154,17 @@ button.mix-row { cursor: pointer; }
 .duty-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .duty-text b { font-size: 15px; }
 .duty-text > span { color: var(--ink-soft); font-size: 12.5px; }
-.duty-code { display: flex; gap: 8px; margin-top: 8px; max-width: 340px; }
-.duty-code input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(5, 15, 38, .7); color: var(--ink); font-size: 15px; font-weight: 700; letter-spacing: .18em; }
-.duty-code input:focus { outline: none; border-color: var(--mint); box-shadow: 0 0 0 4px rgba(34, 199, 169, .16); }
 .link-btn { align-self: flex-start; padding: 0; margin-top: 6px; border: 0; background: none; color: var(--mint-soft); font-size: 12.5px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 
 /* Staff manager's Clock-in page. */
-.clockin-grid { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 18px; align-items: start; }
-.clockin-qr { text-align: center; }
-.clockin-qr .card-sub { text-align: left; }
-.qr-box { display: grid; place-items: center; width: 100%; max-width: 280px; aspect-ratio: 1; margin: 6px auto 12px; padding: 12px; border-radius: var(--r); background: #fff; color: var(--navy); }
-.qr-box img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
-.qr-code-text { font-size: 28px; font-weight: 800; letter-spacing: .3em; padding-left: .3em; }
-.clockin-actions { display: flex; justify-content: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-.clockin-warning { display: flex; gap: 8px; align-items: flex-start; text-align: left; padding: 10px 12px; margin: 0 0 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); font-size: 12.5px; }
-.clockin-warning svg { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 2px; }
+.clockin-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .duty-list li { gap: 12px; }
 .duty-who { display: flex; flex-direction: column; min-width: 0; }
 .duty-who > span, .duty-times { color: var(--ink-soft); font-size: 12px; }
 .duty-pill { flex: 0 0 auto; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
 .duty-pill.on { background: var(--good-bg); color: var(--good); }
 .duty-pill.off { background: var(--slate-bg); color: var(--slate); }
-@media (max-width: 900px) { .clockin-grid { grid-template-columns: minmax(0, 1fr); } .clockin-qr { max-width: 460px; width: 100%; margin-inline: auto; } }
+@media (max-width: 900px) { .clockin-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) {
   .duty-card { flex-wrap: wrap; }
   .duty-text { flex-basis: calc(100% - 26px); }
@@ -1183,7 +1172,6 @@ button.mix-row { cursor: pointer; }
   .duty-times { width: 100%; }
 }
 .duty-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.qr-view { aspect-ratio: 1; object-fit: cover; }
 .timing-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .timing-tag { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; white-space: nowrap; }
 .timing-tag.ok { background: var(--good-bg); color: var(--good); }
@@ -1193,7 +1181,7 @@ button.mix-row { cursor: pointer; }
 .work-hours input { padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(5, 15, 38, .7); color: var(--ink); font-size: 14px; color-scheme: dark; }
 .work-hours input:focus { outline: none; border-color: var(--mint); }
 
-/* ===== Clock-in: breaks, leave, schedules, wall screen, attendance ===== */
+/* ===== Clock-in: breaks, leave, schedules, attendance ===== */
 .duty-card.break { border-color: rgba(77, 143, 240, .4); background: linear-gradient(90deg, rgba(77, 143, 240, .14), var(--panel) 60%); }
 .duty-card.break .duty-dot { background: var(--royal-light); box-shadow: 0 0 0 5px rgba(77, 143, 240, .16); }
 .duty-card.leave { border-color: rgba(168, 182, 207, .3); background: linear-gradient(90deg, var(--slate-bg), var(--panel) 60%); }
@@ -1209,9 +1197,6 @@ button.mix-row { cursor: pointer; }
 .handover-list small { color: var(--ink-soft); font-size: 12px; }
 .urgent-word { color: var(--bad); font-weight: 800; }
 
-.mode-switch { display: inline-flex; padding: 3px; margin: 4px 0 10px; border-radius: 999px; background: rgba(5, 15, 38, .7); border: 1px solid var(--border); }
-.mode-switch button { border: 0; background: none; color: var(--ink-soft); font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 999px; }
-.mode-switch button.on { background: var(--mint); color: var(--navy-deep); }
 .duty-row-end { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .duty-pill.break { background: rgba(77, 143, 240, .16); color: var(--royal-light); }
 .duty-pill.leave { background: var(--warn-bg); color: var(--warn); }
@@ -1232,22 +1217,6 @@ button.mix-row { cursor: pointer; }
 .leave-form label.grow { flex: 1 1 180px; }
 .leave-form input { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: rgba(5, 15, 38, .7); color: var(--ink); font-size: 13.5px; color-scheme: dark; }
 .leave-form input:focus { outline: none; border-color: var(--mint); }
-
-.wall-screen { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 8px; padding: 24px; text-align: center; background: radial-gradient(ellipse at top, #0f2a5c, var(--navy-deep) 70%); overflow-y: auto; }
-.wall-screen h1 { margin: 0; font-size: clamp(26px, 4vw, 44px); }
-.wall-screen p { margin: 0; color: var(--ink-soft); font-size: clamp(14px, 1.8vw, 20px); }
-.wall-close { position: absolute; top: 16px; right: 16px; }
-.wall-time { font-size: 20px; font-weight: 800; color: var(--mint-soft); }
-.wall-qr { width: min(50vh, 82vw); aspect-ratio: 1; padding: 18px; margin-top: 8px; border-radius: 24px; background: #fff; display: grid; place-items: center; color: var(--navy); }
-.wall-qr img { width: 100%; height: 100%; image-rendering: pixelated; }
-.wall-code { font-size: clamp(30px, 5vw, 56px); font-weight: 800; letter-spacing: .3em; padding-left: .3em; }
-.wall-timer { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 14px; }
-.wall-bar { width: min(360px, 70vw); height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .12); overflow: hidden; }
-.wall-bar span { display: block; height: 100%; background: var(--mint); transition: width 1s linear; }
-.wall-team { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; max-width: 900px; }
-.wall-person { padding: 6px 12px; border-radius: 999px; background: var(--good-bg); color: var(--good); font-size: 13px; font-weight: 700; }
-.wall-person.break { background: rgba(77, 143, 240, .16); color: var(--royal-light); }
-.wall-person.off { background: var(--slate-bg); color: var(--slate); }
 
 .table-scroll { overflow-x: auto; }
 .attendance-table { min-width: 640px; }

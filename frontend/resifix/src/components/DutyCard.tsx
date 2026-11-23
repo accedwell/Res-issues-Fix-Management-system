@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
-import { QrScanner } from './QrScanner'
 import { useApp } from '../context/appContext'
 import { describeHours, leaveSpan, todayLocal } from '../dutyUtils'
 import { formatTime, isOpen } from '../utils'
@@ -9,14 +8,11 @@ import type { Issue } from '../types'
 
 // The technician's clock-in card at the top of "Assigned to Me". New jobs only come to technicians
 // who are on duty and not on a break.
-//  - Off duty: clock in by scanning the QR code at the maintenance office, or typing its code.
+//  - Off duty: "Clock in" when they start work.
 //  - On duty: take a break, or clock out (handing unfinished jobs back if they want).
 //  - On a break: "I'm back" (the break also ends by itself when the time is up).
 export function DutyCard() {
   const { duty, issues, clockIn, clockOut, startBreak, endBreak } = useApp()
-  const [code, setCode] = useState('')
-  const [typing, setTyping] = useState(false)
-  const [scanning, setScanning] = useState(false)
   const [choosingBreak, setChoosingBreak] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -25,8 +21,6 @@ export function DutyCard() {
   const run = async (action: () => Promise<boolean>) => {
     setBusy(true)
     if (await action()) {
-      setCode('')
-      setTyping(false)
       setChoosingBreak(false)
       setLeaving(false)
     }
@@ -129,49 +123,14 @@ export function DutyCard() {
       <span className="duty-dot" aria-hidden />
       <div className="duty-text">
         <b>You are off duty</b>
-        <span>No new jobs come to you. Clock in with the QR code at the maintenance office: scan it, or type the code under it.</span>
+        <span>No new jobs come to you. Clock in when you start work.</span>
         {hours}
         <div className="duty-options">
-          <button className={'btn btn-sm ' + (typing ? 'btn-ghost' : 'btn-primary')} disabled={busy} onClick={() => setScanning(true)}>
-            <Icon name="camera" /> Scan QR code
-          </button>
-          <button className={'btn btn-sm ' + (typing ? 'btn-primary' : 'btn-ghost')} disabled={busy} onClick={() => setTyping(true)}>
-            <Icon name="clipboard" /> Type code
+          <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => void run(clockIn)}>
+            <Icon name="check" /> {busy ? 'Saving…' : 'Clock in'}
           </button>
         </div>
-        {typing && (
-          <form
-            className="duty-code"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (code.trim()) void run(() => clockIn(code))
-            }}
-          >
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="Code under the QR"
-              aria-label="Clock-in code"
-              maxLength={12}
-              autoFocus
-              autoCapitalize="characters"
-              autoComplete="off"
-            />
-            <button className="btn btn-primary btn-sm" disabled={busy || !code.trim()}>
-              {busy ? 'Checking…' : 'Clock in'}
-            </button>
-          </form>
-        )}
       </div>
-      {scanning && (
-        <QrScanner
-          close={() => setScanning(false)}
-          onCode={(scanned) => {
-            setScanning(false)
-            void run(() => clockIn(scanned))
-          }}
-        />
-      )}
     </div>
   )
 }

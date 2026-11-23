@@ -5,7 +5,7 @@ import { PasswordInput } from '../components/PasswordInput'
 import { useApp } from '../context/appContext'
 
 export function Login() {
-  const { setRoute, login, pendingClockIn } = useApp()
+  const { setRoute, login } = useApp()
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -32,9 +32,7 @@ export function Login() {
       <div className="auth-card">
         <AuthBrand onClick={() => setRoute('landing')} />
         <div className="auth-title">Welcome back</div>
-        <p className="auth-sub">
-          {pendingClockIn ? 'Log in to finish clocking in.' : 'Log in to report and track residence issues.'}
-        </p>
+        <p className="auth-sub">Log in to report and track residence issues.</p>
         <form onSubmit={submit}>
           <div className="field">
             <label>Email address</label>

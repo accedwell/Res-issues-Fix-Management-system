@@ -20,10 +20,10 @@ export interface StaffWithWorkload {
   name: string;
   specialization: string;
   openJobs: number;
-  // Clocked in with the QR code, and when.
+  // Clocked in, and when.
   onDuty: boolean;
   onDutySince: string | null;
-  // The supervisor / system admin who clocked them in for them; null when they scanned in themselves.
+  // The supervisor / system admin who clocked them in for them; null when they clocked in themselves.
   clockedInBy: string | null;
   // Number to call them on (only staff roles load this list).
   phone: string | null;

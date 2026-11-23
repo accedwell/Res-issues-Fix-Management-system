@@ -211,6 +211,11 @@ const TOURS: Record<Role, { steps: TourStep[]; finish: Finish }> = {
         target: ['nav-availability'],
       },
       {
+        title: 'Reports',
+        text: 'Weekly and monthly reports, trends, problem rooms, student feedback and the team’s attendance. View them, save a PDF or download a spreadsheet.',
+        target: ['nav-reports'],
+      },
+      {
         title: 'Need this again?',
         text: 'Tap this button any time to replay the tour.',
         target: ['help'],

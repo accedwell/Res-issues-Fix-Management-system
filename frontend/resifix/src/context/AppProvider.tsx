@@ -40,30 +40,6 @@ function toUserRow(user: ApiUser): User {
   }
 }
 
-// Scanning the clock-in QR code opens ResiFix at #clock-in=CODE. The code is kept for this tab
-// (so it survives logging in first) and taken out of the address bar.
-const CLOCK_IN_KEY = 'resifix-clock-in'
-function readClockInLink(): string | null {
-  const match = /^#clock-in=([A-Za-z0-9]{4,12})$/.exec(window.location.hash)
-  try {
-    if (match) {
-      sessionStorage.setItem(CLOCK_IN_KEY, match[1])
-      history.replaceState(null, '', window.location.pathname + window.location.search)
-      return match[1]
-    }
-    return sessionStorage.getItem(CLOCK_IN_KEY)
-  } catch {
-    return match?.[1] ?? null
-  }
-}
-function forgetClockInLink() {
-  try {
-    sessionStorage.removeItem(CLOCK_IN_KEY)
-  } catch {
-    // Nothing saved.
-  }
-}
-
 // Attendance messages the staff manager gets a pop-up for, as they happen.
 const DUTY_ALERT = /^(Clocked (in|out)|Not clocked in|On break|Back from break|Handed back):/
 // Updates a student should see the moment they happen: who their report was assigned to, when that
@@ -73,9 +49,7 @@ const STUDENT_ALERT = /has been assigned to|is waiting for a technician|accepted
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong. Please try again.')
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [pendingClockIn, setPendingClockIn] = useState(readClockInLink)
-  // Someone who scanned the QR code while logged out goes straight to the login page.
-  const [route, setRoute] = useState<Route>(() => (pendingClockIn ? 'login' : 'landing'))
+  const [route, setRoute] = useState<Route>('landing')
   const [auth, setAuth] = useState<Auth>(LOGGED_OUT)
   const [restoring, setRestoring] = useState(() => !!getToken())
   const [ready, setReady] = useState(false)
@@ -178,30 +152,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [endSession, showToast],
   )
 
-  // Finishes a clock-in from the QR link: right after logging in, or at once when already logged in.
-  // Returns true when there was one. The code is forgotten first, so it can only run once.
-  const finishClockIn = useCallback(
-    async (role: Role) => {
-      const code = readClockInLink()
-      if (!code) return false
-      forgetClockInLink()
-      setPendingClockIn(null)
-      if (role !== 'maintenance') {
-        showToast('Only maintenance technicians clock in with this QR code.')
-        return true
-      }
-      try {
-        await apiClockIn(code)
-        await refresh(['duty', 'issues', 'notifications'])
-        showToast('You are clocked in. New jobs can come to you now.')
-      } catch (err) {
-        showToast(errorMessage(err))
-      }
-      return true
-    },
-    [refresh, showToast],
-  )
-
   const startSession = useCallback(
     async (name: string, role: Role, userId: string, welcome: boolean, home: { block?: string; room?: string } = {}) => {
       roleRef.current = role
@@ -216,7 +166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (role === 'student' && loadedIssues?.some((issue) => issue.studentId === userId && isOverdue(issue))) {
         setModal({ type: 'overdue' })
       }
-      if ((await finishClockIn(role)) || !welcome) return
+      if (!welcome) return
       try {
         const unread = (await fetchNotifications()).filter((n) => !n.read).length
         if (unread) showToast(`You have ${unread} unread notification${unread === 1 ? '' : 's'} — check the bell.`)
@@ -224,7 +174,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // The bell still shows the count once notifications load.
       }
     },
-    [refresh, showToast, finishClockIn],
+    [refresh, showToast],
   )
 
   // Stay logged in across page refreshes while the saved token is still valid.
@@ -248,22 +198,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', onFocus)
     }
   }, [auth.loggedIn, auth.userId, refresh])
-
-  // Scanning the QR code again while ResiFix is already open in this tab.
-  useEffect(() => {
-    const onHash = () => {
-      const code = readClockInLink()
-      if (!code) return
-      if (roleRef.current) {
-        void finishClockIn(roleRef.current)
-      } else {
-        setPendingClockIn(code)
-        setRoute('login')
-      }
-    }
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
-  }, [finishClockIn])
 
   const setTab = (tab: string) => {
     if (auth.role) setTabs((prev) => ({ ...prev, [auth.role as Role]: tab }))
@@ -432,9 +366,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     editPart: (id, part) => save(() => apiEditPart(id, part), ['parts'], `${part.name} updated.`),
     removePart: (part) => save(() => apiRemovePart(part.id), ['parts'], `${part.name} removed from the store.`),
     duty,
-    pendingClockIn: !!pendingClockIn,
-    clockIn: (code) =>
-      save(() => apiClockIn(code), ['duty', 'issues', 'notifications'], 'You are clocked in. New jobs can come to you now.'),
+    clockIn: () =>
+      save(() => apiClockIn(), ['duty', 'issues', 'notifications'], 'You are clocked in. New jobs can come to you now.'),
     clockOut: (handBack) =>
       save(
         () => apiClockOut(handBack),

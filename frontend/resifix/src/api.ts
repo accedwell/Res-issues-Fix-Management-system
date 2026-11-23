@@ -6,7 +6,6 @@ import type {
   Category,
   ChatMessage,
   AttendanceRow,
-  ClockCode,
   DutySchedules,
   DutyShift,
   DutyStatus,
@@ -215,25 +214,22 @@ export const apiAddPart = (part: PartInput) => request<{ part: SparePart }>('POS
 export const apiEditPart = (id: string, part: PartInput) => request<{ part: SparePart }>('PATCH', `/parts/${id}`, part)
 export const apiRemovePart = (id: string) => request('DELETE', `/parts/${id}`)
 
-// ===== Clock-in (QR code) =====
+// ===== Clock-in =====
 
 // Technicians
 export const fetchMyDuty = () => request<DutyStatus>('GET', '/duty/me')
-export const apiClockIn = (code: string) => request<DutyStatus>('POST', '/duty/clock-in', { code })
+export const apiClockIn = () => request<DutyStatus>('POST', '/duty/clock-in')
 // handBack: unfinished jobs to give back to the staff manager when leaving.
 export const apiClockOut = (handBack: string[] = []) => request<DutyStatus>('POST', '/duty/clock-out', { handBack })
 export const apiStartBreak = (minutes: number) => request<DutyStatus>('POST', '/duty/break', { minutes })
 export const apiEndBreak = () => request<DutyStatus>('POST', '/duty/break/end')
-// The supervisor or system admin updating a technician's availability for them (no QR code needed).
+// The supervisor or system admin updating a technician's availability for them.
 export const apiStaffClockIn = (userId: string) => request('POST', `/duty/staff/${userId}/clock-in`)
 export const apiStaffClockOut = (userId: string, handBack: string[]) => request('POST', `/duty/staff/${userId}/clock-out`, { handBack })
 export const apiStaffBreak = (userId: string, minutes: number) => request('POST', `/duty/staff/${userId}/break`, { minutes })
 export const apiStaffEndBreak = (userId: string) => request('POST', `/duty/staff/${userId}/break/end`)
 
 // Staff manager
-export const fetchClockInCode = () => request<ClockCode>('GET', '/duty/code')
-export const apiRenewClockInCode = () => request<{ ok: boolean }>('POST', '/duty/code')
-export const apiSetCodeMode = (mode: ClockCode['mode']) => request<{ mode: ClockCode['mode'] }>('PUT', '/duty/mode', { mode })
 export const fetchShiftsToday = async () => (await request<{ shifts: DutyShift[] }>('GET', '/duty/shifts')).shifts
 export const fetchSchedules = () => request<DutySchedules>('GET', '/duty/schedules')
 export const apiSetTeamHours = (hours: WorkHours) => request<{ team: WorkHours }>('PUT', '/duty/hours', hours)

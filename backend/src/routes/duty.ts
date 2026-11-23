@@ -2,12 +2,10 @@ import { Router } from "express";
 import { currentUser, requireAuth, requireRole } from "../middleware/auth.js";
 import { runAutoAssign } from "../lib/autoAssign.js";
 import { badRequest, notFound } from "../lib/http.js";
-import { rateLimit } from "../lib/rateLimit.js";
 import { attendanceReport, shiftTiming } from "../services/attendance.js";
 import { handBackJob, managersAndSupervisors } from "../services/issueWorkflow.js";
 import {
-  BREAK_MINUTES, clockIn, clockOut, endBreak, getCodeMode, getDailyCode, getScreenCode, isClockInCodeValid, MAX_SHIFT_HOURS,
-  openShift, renewCodes, ROTATE_SECONDS, setCodeMode, shiftsToday, startBreak, type DutyShift,
+  BREAK_MINUTES, clockIn, clockOut, endBreak, MAX_SHIFT_HOURS, openShift, shiftsToday, startBreak, type DutyShift,
 } from "../store/duty.js";
 import { addNotification } from "../store/notifications.js";
 import {
@@ -18,14 +16,11 @@ import { getUser, listUsers } from "../store/users.js";
 import type { User } from "../types.js";
 
 // Clocking in and out, breaks, schedules, leave and attendance.
-// Technicians clock in by scanning the QR code at the maintenance office (or typing the code under
-// it). Only technicians on duty and not on a break get new jobs automatically. The staff manager is
-// told about every clock-in, clock-out and break, with the time and whether it was late or early.
+// Technicians clock in with the "Clock in" button when they start work. Only technicians on duty and
+// not on a break get new jobs automatically. The staff manager is told about every clock-in,
+// clock-out and break, with the time and whether it was late or early.
 export const dutyRouter = Router();
 dutyRouter.use(requireAuth);
-
-// Stops anyone guessing the code by trying thousands of them.
-const codeAttempts = rateLimit({ max: 10, minutes: 15, message: "Too many tries. Please wait a few minutes and scan the QR code again." });
 
 // Attendance news goes to the staff manager and the supervisors.
 export async function tellManagers(message: string) {
@@ -105,19 +100,9 @@ async function endBreakFor(tech: User, by?: User) {
   }
 }
 
-// POST /api/duty/clock-in — { code }. The code comes from the QR code or is typed in.
-dutyRouter.post("/clock-in", requireRole("maintenance"), codeAttempts, async (req, res) => {
+// POST /api/duty/clock-in
+dutyRouter.post("/clock-in", requireRole("maintenance"), async (req, res) => {
   const user = currentUser(req);
-  const code = typeof req.body?.code === "string" ? req.body.code : "";
-  if (!code.trim()) throw badRequest("Scan the clock-in QR code at the maintenance office, or type the code under it");
-  if (!(await isClockInCodeValid(code))) {
-    const screen = (await getCodeMode()) === "rotating";
-    throw badRequest(
-      screen
-        ? "That code has expired or is wrong. Scan the screen at the maintenance office again."
-        : "That clock-in code is not today's. Scan the QR code at the maintenance office again.",
-    );
-  }
   await clockInFor(user);
   res.json(await myStatus(user.id));
 });
@@ -144,8 +129,8 @@ dutyRouter.post("/break/end", requireRole("maintenance"), async (req, res) => {
 });
 
 // ===== For a technician: supervisor and system administrator =====
-// Updating a technician's availability for them, e.g. one who has no phone. No QR code is needed:
-// the supervisor is the one vouching that they are at work.
+// Updating a technician's availability for them, e.g. one who has no phone. The supervisor is the
+// one vouching that they are at work.
 
 // POST /api/duty/staff/:userId/clock-in
 dutyRouter.post("/staff/:userId/clock-in", requireRole("supervisor", "sysadmin"), async (req, res) => {
@@ -175,30 +160,16 @@ dutyRouter.post("/staff/:userId/break/end", requireRole("supervisor", "sysadmin"
   res.json(await myStatus(tech.id));
 });
 
+// ===== Reports: staff manager, supervisor and system administrator =====
+
+// GET /api/duty/attendance?month=2026-11 — the monthly attendance report on the Reports page.
+dutyRouter.get("/attendance", requireRole("admin", "supervisor", "sysadmin"), async (req, res) => {
+  const month = typeof req.query.month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.month) ? req.query.month : localDay().slice(0, 7);
+  res.json({ month, rows: await attendanceReport(month) });
+});
+
 // ===== Staff manager (and system administrator) =====
 dutyRouter.use(requireRole("admin", "sysadmin"));
-
-// GET /api/duty/code — the code to show: today's printed code, or the wall screen's current one.
-dutyRouter.get("/code", async (_req, res) => {
-  const mode = await getCodeMode();
-  const daily = await getDailyCode();
-  const screen = mode === "rotating" ? await getScreenCode() : null;
-  res.json({ mode, day: daily.day, code: screen?.code ?? daily.code, changesAt: screen?.changesAt ?? null, rotateSeconds: ROTATE_SECONDS });
-});
-
-// POST /api/duty/code — new codes now; the old ones stop working straight away.
-dutyRouter.post("/code", async (_req, res) => {
-  await renewCodes();
-  res.json({ ok: true });
-});
-
-// PUT /api/duty/mode — { mode: "daily" | "rotating" }.
-dutyRouter.put("/mode", async (req, res) => {
-  const mode = req.body?.mode;
-  if (mode !== "daily" && mode !== "rotating") throw badRequest("Mode must be daily or rotating");
-  await setCodeMode(mode);
-  res.json({ mode });
-});
 
 // GET /api/duty/shifts — today's clock-ins with names and late / early minutes.
 dutyRouter.get("/shifts", async (_req, res) => {
@@ -268,10 +239,4 @@ dutyRouter.post("/leave", async (req, res) => {
 dutyRouter.delete("/leave/:id", async (req, res) => {
   if (!(await removeLeave(String(req.params.id)))) throw notFound("Leave not found");
   res.json({ ok: true });
-});
-
-// GET /api/duty/attendance?month=2026-11
-dutyRouter.get("/attendance", async (req, res) => {
-  const month = typeof req.query.month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.month) ? req.query.month : localDay().slice(0, 7);
-  res.json({ month, rows: await attendanceReport(month) });
 });

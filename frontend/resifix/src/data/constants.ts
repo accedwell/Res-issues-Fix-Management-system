@@ -129,6 +129,7 @@ export const NAV: Record<Role, NavItem[]> = {
     { key: 'issues', label: 'All Issues', icon: 'list' },
     { key: 'assignments', label: 'Assignments', icon: 'tools' },
     { key: 'availability', label: 'Team Availability', icon: 'clock' },
+    { key: 'reports', label: 'Reports', icon: 'file-text' },
   ],
 }
 
@@ -143,7 +144,13 @@ export const PAGE_TITLES: Record<Role, Record<string, string>> = {
     categories: 'Manage Categories',
     settings: 'System Settings',
   },
-  supervisor: { overview: 'Home', issues: 'All Issues', assignments: 'Who Is Assigned to What', availability: 'Team Availability' },
+  supervisor: {
+    overview: 'Home',
+    issues: 'All Issues',
+    assignments: 'Who Is Assigned to What',
+    availability: 'Team Availability',
+    reports: 'Reports',
+  },
 }
 
 export const DEFAULT_TABS: Record<Role, string> = {

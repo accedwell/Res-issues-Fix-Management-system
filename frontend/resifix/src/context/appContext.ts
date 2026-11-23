@@ -70,10 +70,8 @@ export interface AppState {
   removePart: (part: SparePart) => Promise<boolean>
   // Maintenance only: whether they are clocked in. Null for other roles.
   duty: DutyStatus | null
-  // True when the clock-in QR code was scanned and is waiting for the technician to log in.
-  pendingClockIn: boolean
-  // Clock in with today's code (from the QR code, or typed), and clock out.
-  clockIn: (code: string) => Promise<boolean>
+  // Clock in when starting work, and clock out.
+  clockIn: () => Promise<boolean>
   // handBack: unfinished jobs given back to the staff manager when leaving.
   clockOut: (handBack: string[]) => Promise<boolean>
   startBreak: (minutes: number) => Promise<boolean>

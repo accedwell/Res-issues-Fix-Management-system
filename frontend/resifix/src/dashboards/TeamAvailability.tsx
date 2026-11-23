@@ -7,7 +7,7 @@ import { formatTime, initials, isOpen, telHref } from '../utils'
 import type { Staff } from '../types'
 
 // The supervisor and the system admin can update a technician's availability for them, for example
-// someone without a phone who cannot scan the clock-in QR code: clock in, start or end a break, and
+// someone without a phone who cannot clock in themselves: clock in, start or end a break, and
 // clock out (handing back any jobs they cannot finish). Each change is recorded with who made it,
 // the staff manager is told, and the technician gets a notification.
 
@@ -118,7 +118,7 @@ export function TeamAvailability() {
         <span className="hotspot-note">{onDuty} available for new jobs</span>
       </div>
       <p className="card-sub">
-        Update a technician’s availability for them, for example someone without a phone who cannot scan the clock-in QR code. They get a
+        Update a technician’s availability for them, for example someone without a phone who cannot clock in themselves. They get a
         notification, the staff manager is told, and the record shows you made the change. Only technicians on duty and not on a break get new
         jobs.
       </p>

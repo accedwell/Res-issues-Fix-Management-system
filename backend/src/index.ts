@@ -133,7 +133,7 @@ async function checkShifts() {
   let changed = false;
   for (const shift of await closeForgottenShifts()) {
     changed = true;
-    await addNotification(shift.userId, `You were clocked out automatically after ${MAX_SHIFT_HOURS} hours. Scan the clock-in QR code when you start again.`);
+    await addNotification(shift.userId, `You were clocked out automatically after ${MAX_SHIFT_HOURS} hours. Clock in again when you start work.`);
     const name = (await getUser(shift.userId))?.name;
     if (name) {
       await tellManagers(`Clocked out: ${name} forgot to clock out; the system did it after ${MAX_SHIFT_HOURS} hours (clocked in at ${clockTime(shift.clockInAt)}).`);

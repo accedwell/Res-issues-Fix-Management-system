@@ -7,7 +7,7 @@ Gives new residence reports to a maintenance technician automatically.
 2. Asks Groq (AI) what kind of job it is and how urgent. If Groq is down, slow, over its free
    limit, or answers nonsense, simple keyword matching is used instead, so assignment never breaks.
 3. Picks the technician with the matching job and the fewest open jobs (plain SQL, no AI), from
-   those on duty (clocked in with the QR code). If nobody is on duty the report waits.
+   those on duty (clocked in). If nobody is on duty the report waits.
 4. Saves the assignment, a history entry and notifications, in the same format as the backend.
 5. Optionally emails the technician through Brevo.
 
@@ -168,7 +168,7 @@ FIND_TECHNICIAN_SQL = """
             AND i.status NOT IN ('RESOLVED', 'CLOSED')
      WHERE u.role = 'MAINTENANCE'
        AND u.is_active = TRUE
-       -- On duty: clocked in with the QR code, not clocked out yet, and not on a break.
+       -- On duty: clocked in, not clocked out yet, and not on a break.
        -- (Times are stored as UTC without a time zone, hence NOW() AT TIME ZONE 'UTC'.)
        AND EXISTS (SELECT 1 FROM duty_shifts s
                     WHERE s.user_id = u.id AND s.clock_out_at IS NULL
