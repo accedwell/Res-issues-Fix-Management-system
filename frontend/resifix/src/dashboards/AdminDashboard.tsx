@@ -4,15 +4,16 @@ import { IssueMix } from './IssueMix'
 import { PartsStore } from './PartsStore'
 import { useState, type ChangeEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { CallButton } from '../components/CallButton'
 import { EmptyState, IssueRow } from '../components/common'
 import { ActivityFeed } from '../components/ActivityFeed'
 import { Icon } from '../components/Icon'
 import { TrendChart } from '../components/TrendChart'
 import { useApp } from '../context/appContext'
 import { downloadIssuesCsv } from '../exportCsv'
-import { buildReportHtml, customPeriod, issuesInPeriod, monthPeriod, openReport } from '../periodReport'
+import { buildReportHtml, customPeriod, issuesInPeriod, mondayOf, monthPeriod, openReport, reportWeeks, weekPeriod } from '../periodReport'
 import { BLOCKS, DEFAULT_FILTERS, ISSUE_VIEWS, STATUSES } from '../data/constants'
-import { daysOpen, formatDate, initials, isOpen, isOverdue, lastReopen, matchesView, sameRoom, stop } from '../utils'
+import { daysOpen, formatDate, initials, isOpen, isOverdue, lastReopen, notAcceptedInTime, matchesView, sameRoom, stop } from '../utils'
 import type { Filters, Issue } from '../types'
 
 export function AdminDashboard({ tab }: { tab: string }) {
@@ -25,10 +26,35 @@ export function AdminDashboard({ tab }: { tab: string }) {
 
 // Buttons shown on an issue row for the residence admin.
 // New reports can be marked as received; open ones can be assigned or reassigned.
+// Only the supervisor assigns, reassigns and records "Accepted by phone"; the staff manager (and the
+// supervisor) can mark new reports as received.
 function AdminIssueActions({ issue }: { issue: Issue }) {
-  const { setModal, receiveIssue } = useApp()
+  const { setModal, receiveIssue, confirmAcceptedByPhone, auth } = useApp()
   const [busy, setBusy] = useState(false)
+  const canAssign = auth.role === 'supervisor'
   if (!isOpen(issue)) return null
+  if (!canAssign && issue.status !== 'Submitted') return null
+  // Not accepted in time: the supervisor phones the technician, then records the answer here.
+  if (canAssign && notAcceptedInTime(issue)) {
+    return (
+      <span style={{ display: 'inline-flex', gap: 6 }}>
+        <button
+          className="btn btn-navy btn-sm"
+          disabled={busy}
+          onClick={stop(async () => {
+            setBusy(true)
+            if (!(await confirmAcceptedByPhone(issue))) setBusy(false)
+          })}
+        >
+          <Icon name="check" /> {busy ? 'Saving…' : 'Accepted by phone'}
+        </button>
+        <CallButton phone={issue.assignedToPhone} name={issue.assignedToName} compact />
+        <button className="btn btn-ghost btn-sm" onClick={stop(() => setModal({ type: 'assign', issueId: issue.id }))}>
+          Reassign
+        </button>
+      </span>
+    )
+  }
 
   return (
     <span style={{ display: 'inline-flex', gap: 6 }}>
@@ -44,12 +70,14 @@ function AdminIssueActions({ issue }: { issue: Issue }) {
           <Icon name="check" /> {busy ? 'Saving…' : 'Mark received'}
         </button>
       )}
-      <button
-        className={'btn btn-sm ' + (issue.assignedTo ? 'btn-ghost' : 'btn-navy')}
-        onClick={stop(() => setModal({ type: 'assign', issueId: issue.id }))}
-      >
-        {issue.assignedTo ? 'Reassign' : 'Assign'}
-      </button>
+      {canAssign && (
+        <button
+          className={'btn btn-sm ' + (issue.assignedTo ? 'btn-ghost' : 'btn-navy')}
+          onClick={stop(() => setModal({ type: 'assign', issueId: issue.id }))}
+        >
+          {issue.assignedTo ? 'Reassign' : 'Assign'}
+        </button>
+      )}
     </span>
   )
 }
@@ -63,13 +91,19 @@ function useShowIssues() {
   }
 }
 
-function Overview() {
+export function Overview() {
   const { issues } = useApp()
   const showIssues = useShowIssues()
-  // Unassigned, not resolved or overdue issues, overdue first, then the oldest.
+  // Jobs nobody accepted in time first (someone has to phone the technician), then overdue,
+  // unassigned and not resolved issues, overdue first, then the oldest.
   const needsAttention = issues
-    .filter((i) => isOpen(i) && (!i.assignedTo || i.status === 'Not Resolved' || isOverdue(i)))
-    .sort((a, b) => Number(isOverdue(b)) - Number(isOverdue(a)) || daysOpen(b) - daysOpen(a))
+    .filter((i) => isOpen(i) && (!i.assignedTo || i.status === 'Not Resolved' || isOverdue(i) || notAcceptedInTime(i)))
+    .sort(
+      (a, b) =>
+        Number(notAcceptedInTime(b)) - Number(notAcceptedInTime(a)) ||
+        Number(isOverdue(b)) - Number(isOverdue(a)) ||
+        daysOpen(b) - daysOpen(a),
+    )
 
   return (
     <div>
@@ -81,7 +115,7 @@ function Overview() {
               View all issues
             </button>
           </div>
-          <p className="card-sub">Unassigned reports, jobs maintenance could not resolve and anything overdue, most urgent first.</p>
+          <p className="card-sub">Jobs a technician has not accepted, unassigned reports, jobs maintenance could not resolve and anything overdue, most urgent first.</p>
           {needsAttention.length ? (
             needsAttention.slice(0, 6).map((issue) => (
               <IssueRow
@@ -476,7 +510,7 @@ function TeamWorkload() {
   )
 }
 
-function AllIssues() {
+export function AllIssues() {
   const { issues, categories, filters, setFilters, staff, catInfo } = useApp()
   const search = filters.search.trim().toLowerCase()
   const matching = issues.filter(
@@ -576,21 +610,26 @@ function reportMonths(issues: Issue[], current: string): string[] {
   return months
 }
 
-// Pick a month (or your own dates), then view the report, save it as a PDF or download the issues as a spreadsheet.
-// "scope" describes any search on the Reports page, so the report says what it covers.
+// Pick a week, a month or your own dates, then view the report, save it as a PDF or download the issues as a
+// spreadsheet. "scope" describes any search on the Reports page, so the report says what it covers.
 function PeriodReport({ issues, scope }: { issues: Issue[]; scope: string }) {
   const { catInfo, auth } = useApp()
-  const [today] = useState(() => new Date().toISOString().slice(0, 10))
+  // Today on this computer's calendar (not UTC), so just after midnight on Monday is already the new week.
+  const [today] = useState(() => new Date().toLocaleDateString('en-CA'))
   const thisMonth = today.slice(0, 7)
+  const thisWeek = mondayOf(today)
   const months = reportMonths(issues, thisMonth)
-  const [choice, setChoice] = useState(thisMonth)
+  const weeks = reportWeeks(issues, today)
+  const [kind, setKind] = useState<'week' | 'month' | 'custom'>('month')
+  const [month, setMonth] = useState(thisMonth)
+  const [week, setWeek] = useState(thisWeek)
   const [from, setFrom] = useState(thisMonth + '-01')
   const [to, setTo] = useState(today)
   const [blocked, setBlocked] = useState(false)
 
-  const custom = choice === 'custom'
+  const custom = kind === 'custom'
   const badRange = custom && (!from || !to || from > to)
-  const period = custom ? customPeriod(from, to) : monthPeriod(choice)
+  const period = custom ? customPeriod(from, to) : kind === 'week' ? weekPeriod(week) : monthPeriod(month)
   const count = badRange ? 0 : issuesInPeriod(issues, period).length
 
   const open = (print: boolean) => {
@@ -601,17 +640,43 @@ function PeriodReport({ issues, scope }: { issues: Issue[]; scope: string }) {
   return (
     <div className="card">
       <h2>Period report</h2>
-      <p className="card-sub">A report for one month or dates you choose. View it, save it as a PDF, or download the issues as a spreadsheet.</p>
+      <p className="card-sub">
+        A weekly or monthly report, or for dates you choose. View it, save it as a PDF, or download the issues as a spreadsheet.
+      </p>
+      <div className="seg" role="group" aria-label="Report type">
+        {(
+          [
+            ['week', 'Weekly'],
+            ['month', 'Monthly'],
+            ['custom', 'Choose dates'],
+          ] as const
+        ).map(([key, label]) => (
+          <button key={key} className={'seg-btn' + (kind === key ? ' on' : '')} aria-pressed={kind === key} onClick={() => setKind(key)}>
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="toolbar" style={{ alignItems: 'center' }}>
-        <select value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="Report period">
-          {months.map((m) => (
-            <option key={m} value={m}>
-              {monthPeriod(m).label}
-              {m === thisMonth ? ' (this month)' : ''}
-            </option>
-          ))}
-          <option value="custom">Choose dates…</option>
-        </select>
+        {kind === 'week' && (
+          <select value={week} onChange={(e) => setWeek(e.target.value)} aria-label="Week">
+            {weeks.map((w) => (
+              <option key={w} value={w}>
+                {weekPeriod(w).label}
+                {w === thisWeek ? ' (this week)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
+        {kind === 'month' && (
+          <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
+            {months.map((m) => (
+              <option key={m} value={m}>
+                {monthPeriod(m).label}
+                {m === thisMonth ? ' (this month)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
         {custom && (
           <>
             <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
@@ -624,7 +689,7 @@ function PeriodReport({ issues, scope }: { issues: Issue[]; scope: string }) {
         <div className="field-error">Pick a start date that is on or before the end date.</div>
       ) : (
         <p className="hotspot-note" style={{ marginTop: 0 }}>
-          {count} issue{count === 1 ? '' : 's'} reported in {period.label}.
+          {count} issue{count === 1 ? '' : 's'} reported {kind === 'week' ? `in ${period.label} (Monday to Sunday)` : `in ${period.label}`}.
         </p>
       )}
       <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
@@ -651,7 +716,8 @@ const NO_SEARCH = { text: '', category: 'all', block: 'all', staff: 'all' }
 // How many matching issues to list under the search before "Show all".
 const RESULTS_SHOWN = 5
 
-function Reports() {
+// The Reports page: the staff manager and the supervisor both use it.
+export function Reports() {
   const { issues: all, categories, staff, catInfo } = useApp()
   // Searching narrows every section on this page, the period report and the downloads.
   const [search, setSearch] = useState(NO_SEARCH)

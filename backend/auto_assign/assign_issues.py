@@ -7,7 +7,7 @@ Gives new residence reports to a maintenance technician automatically.
 2. Asks Groq (AI) what kind of job it is and how urgent. If Groq is down, slow, over its free
    limit, or answers nonsense, simple keyword matching is used instead, so assignment never breaks.
 3. Picks the technician with the matching job and the fewest open jobs (plain SQL, no AI), from
-   those on duty (clocked in with the QR code). If nobody is on duty the report waits.
+   those on duty (clocked in). If nobody is on duty the report waits.
 4. Saves the assignment, a history entry and notifications, in the same format as the backend.
 5. Optionally emails the technician through Brevo.
 
@@ -168,7 +168,7 @@ FIND_TECHNICIAN_SQL = """
             AND i.status NOT IN ('RESOLVED', 'CLOSED')
      WHERE u.role = 'MAINTENANCE'
        AND u.is_active = TRUE
-       -- On duty: clocked in with the QR code, not clocked out yet, and not on a break.
+       -- On duty: clocked in, not clocked out yet, and not on a break.
        -- (Times are stored as UTC without a time zone, hence NOW() AT TIME ZONE 'UTC'.)
        AND EXISTS (SELECT 1 FROM duty_shifts s
                     WHERE s.user_id = u.id AND s.clock_out_at IS NULL
@@ -314,6 +314,19 @@ def process_issue(conn, issue, categories: dict) -> str:
             add_history(cur, issue["id"], "Submitted", "COMMENT_ADDED",
                         f"Auto-assign: looks like {categories.get(category, category)}, but no technician is "
                         "on duty. It will go to the first technician who clocks in, or the staff manager can assign it.")
+            # Tell the student it is waiting (once per report) and that they will hear who gets it.
+            cur.execute(
+                "SELECT 1 FROM notifications WHERE issue_id = %s AND title = 'Waiting for a technician'",
+                (issue["id"],),
+            )
+            if cur.fetchone() is None:
+                cur.execute("SELECT reporter_id FROM maintenance_issues WHERE id = %s", (issue["id"],))
+                reporter = cur.fetchone()
+                if reporter:
+                    add_notification(cur, reporter["reporter_id"], issue["id"], "Waiting for a technician",
+                                     f"{issue['reference']} is waiting for a technician: nobody is on duty right now. "
+                                     "It will be assigned as soon as someone clocks in, and you will be told who.",
+                                     "STATUS_UPDATED")
             # Urgent reports can't wait for someone to clock in: tell the staff manager now.
             if priority == "URGENT":
                 cur.execute("SELECT id FROM users WHERE role = 'ADMIN' AND is_active = TRUE")
@@ -329,7 +342,7 @@ def process_issue(conn, issue, categories: dict) -> str:
         cur.execute(
             """
             UPDATE maintenance_issues
-               SET assignee_id = %s, category_id = %s, priority = %s,
+               SET assignee_id = %s, category_id = %s, priority = %s, accepted_at = NULL,
                    status = 'ASSIGNED', assigned_at = NOW(), updated_at = NOW()
              WHERE id = %s
                AND assignee_id IS NULL
@@ -350,7 +363,7 @@ def process_issue(conn, issue, categories: dict) -> str:
         reporter = cur.fetchone()
         if reporter:
             add_notification(cur, reporter["reporter_id"], issue["id"], "Report assigned",
-                             f"{issue['reference']} has been assigned to {tech['full_name']}.")
+                             f"{issue['reference']} has been assigned to {tech['full_name']}. Waiting for them to accept the job.")
         conn.commit()
         log(f"  OK assigned to {tech['full_name']} ({tech['specialization']}, had {tech['open_jobs']} open jobs)")
 

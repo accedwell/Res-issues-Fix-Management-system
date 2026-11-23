@@ -2,12 +2,10 @@ import { Router } from "express";
 import { currentUser, requireAuth, requireRole } from "../middleware/auth.js";
 import { runAutoAssign } from "../lib/autoAssign.js";
 import { badRequest, notFound } from "../lib/http.js";
-import { rateLimit } from "../lib/rateLimit.js";
 import { attendanceReport, shiftTiming } from "../services/attendance.js";
-import { handBackJob } from "../services/issueWorkflow.js";
+import { handBackJob, managersAndSupervisors } from "../services/issueWorkflow.js";
 import {
-  BREAK_MINUTES, clockIn, clockOut, endBreak, getCodeMode, getDailyCode, getScreenCode, isClockInCodeValid, MAX_SHIFT_HOURS,
-  openShift, renewCodes, ROTATE_SECONDS, setCodeMode, shiftsToday, startBreak, type DutyShift,
+  BREAK_MINUTES, clockIn, clockOut, endBreak, MAX_SHIFT_HOURS, openShift, shiftsToday, startBreak, type DutyShift,
 } from "../store/duty.js";
 import { addNotification } from "../store/notifications.js";
 import {
@@ -15,19 +13,18 @@ import {
   setSchedule, setTeamHours, timingNote, type Schedule,
 } from "../store/schedules.js";
 import { getUser, listUsers } from "../store/users.js";
+import type { User } from "../types.js";
 
 // Clocking in and out, breaks, schedules, leave and attendance.
-// Technicians clock in by scanning the QR code at the maintenance office (or typing the code under
-// it). Only technicians on duty and not on a break get new jobs automatically. The staff manager is
-// told about every clock-in, clock-out and break, with the time and whether it was late or early.
+// Technicians clock in with the "Clock in" button when they start work. Only technicians on duty and
+// not on a break get new jobs automatically. The staff manager is told about every clock-in,
+// clock-out and break, with the time and whether it was late or early.
 export const dutyRouter = Router();
 dutyRouter.use(requireAuth);
 
-// Stops anyone guessing the code by trying thousands of them.
-const codeAttempts = rateLimit({ max: 10, minutes: 15, message: "Too many tries. Please wait a few minutes and scan the QR code again." });
-
+// Attendance news goes to the staff manager and the supervisors.
 export async function tellManagers(message: string) {
-  for (const manager of await listUsers("admin")) await addNotification(manager.id, message);
+  for (const manager of await managersAndSupervisors()) await addNotification(manager.id, message);
 }
 
 const onBreak = (shift: DutyShift | undefined) => !!shift?.breakUntil && Date.parse(shift.breakUntil) > Date.now();
@@ -56,92 +53,123 @@ dutyRouter.get("/me", requireRole("maintenance"), async (req, res) => {
   res.json(await myStatus(currentUser(req).id));
 });
 
-// POST /api/duty/clock-in — { code }. The code comes from the QR code or is typed in.
-dutyRouter.post("/clock-in", requireRole("maintenance"), codeAttempts, async (req, res) => {
-  const user = currentUser(req);
-  const code = typeof req.body?.code === "string" ? req.body.code : "";
-  if (!code.trim()) throw badRequest("Scan the clock-in QR code at the maintenance office, or type the code under it");
-  if (!(await isClockInCodeValid(code))) {
-    const screen = (await getCodeMode()) === "rotating";
-    throw badRequest(
-      screen
-        ? "That code has expired or is wrong. Scan the screen at the maintenance office again."
-        : "That clock-in code is not today's. Scan the QR code at the maintenance office again.",
-    );
+// The four availability steps. A technician does them for themselves; the supervisor or system admin
+// can do them for a technician (e.g. one without a phone). "by" is whoever did it for them: the staff
+// manager's message then says so, and the technician gets a notification.
+const recordedBy = (by?: User) => (by ? ` (recorded by ${by.name})` : "");
+
+async function clockInFor(tech: User, by?: User) {
+  if (onLeaveOn(await listLeave({ userId: tech.id, from: localDay() }), tech.id, localDay())) {
+    throw badRequest(by ? `${tech.name} is on leave today. Remove the leave first if they are working.` : "You are on leave today. Ask the staff manager to remove the leave if you are working.");
   }
-  if (onLeaveOn(await listLeave({ userId: user.id, from: localDay() }), user.id, localDay())) {
-    throw badRequest("You are on leave today. Ask the staff manager to remove the leave if you are working.");
-  }
-  const { shift, started } = await clockIn(user.id);
+  const { shift, started } = await clockIn(tech.id, by?.name ?? null);
   if (started) {
-    const schedule = await getSchedule(user.id);
-    await tellManagers(`Clocked in: ${user.name} at ${clockTime(shift.clockInAt)} — ${timingNote(shift.clockInAt, "in", schedule)}.`);
+    const schedule = await getSchedule(tech.id);
+    await tellManagers(`Clocked in: ${tech.name} at ${clockTime(shift.clockInAt)} — ${timingNote(shift.clockInAt, "in", schedule)}${recordedBy(by)}.`);
+    if (by) await addNotification(tech.id, `Availability: ${by.name} clocked you in at ${clockTime(shift.clockInAt)}. You can now get new jobs.`);
   }
   // Reports that were waiting because nobody was on duty can go out now.
   runAutoAssign();
+}
+
+async function clockOutFor(tech: User, handBack: unknown[], by?: User) {
+  for (const id of handBack.slice(0, 50)) await handBackJob(tech, String(id));
+  const shift = await clockOut(tech.id, by?.name ?? null);
+  if (shift?.clockOutAt) {
+    const schedule = await getSchedule(tech.id);
+    await tellManagers(`Clocked out: ${tech.name} at ${clockTime(shift.clockOutAt)} — ${timingNote(shift.clockOutAt, "out", schedule)}${recordedBy(by)}.`);
+    if (by) await addNotification(tech.id, `Availability: ${by.name} clocked you out at ${clockTime(shift.clockOutAt)}. No new jobs come to you until you are clocked in again.`);
+  }
+  // Handed-back jobs can go to whoever is still on duty.
+  if (handBack.length) runAutoAssign();
+}
+
+async function breakFor(tech: User, minutes: number, by?: User) {
+  if (!BREAK_MINUTES.includes(minutes)) throw badRequest(`A break is ${BREAK_MINUTES.join(", ")} minutes`);
+  const shift = await startBreak(tech.id, minutes);
+  if (!shift?.breakUntil) throw badRequest(by ? `${tech.name} is not clocked in` : "Clock in first");
+  await tellManagers(`On break: ${tech.name} at ${clockTime(new Date())} for ${minutes} min (back at ${clockTime(shift.breakUntil)})${recordedBy(by)}.`);
+  if (by) await addNotification(tech.id, `Availability: ${by.name} started a ${minutes}-minute break for you (back at ${clockTime(shift.breakUntil)}).`);
+}
+
+async function endBreakFor(tech: User, by?: User) {
+  if (await endBreak(tech.id)) {
+    await tellManagers(`Back from break: ${tech.name} at ${clockTime(new Date())}${recordedBy(by)}.`);
+    if (by) await addNotification(tech.id, `Availability: ${by.name} ended your break. You can get new jobs again.`);
+    runAutoAssign();
+  }
+}
+
+// POST /api/duty/clock-in
+dutyRouter.post("/clock-in", requireRole("maintenance"), async (req, res) => {
+  const user = currentUser(req);
+  await clockInFor(user);
   res.json(await myStatus(user.id));
 });
 
 // POST /api/duty/clock-out — { handBack?: [issue ids] }. Jobs not handed back stay theirs.
 dutyRouter.post("/clock-out", requireRole("maintenance"), async (req, res) => {
   const user = currentUser(req);
-  const handBack: unknown[] = Array.isArray(req.body?.handBack) ? req.body.handBack : [];
-  for (const id of handBack.slice(0, 50)) await handBackJob(user, String(id));
-  const shift = await clockOut(user.id);
-  if (shift?.clockOutAt) {
-    const schedule = await getSchedule(user.id);
-    await tellManagers(`Clocked out: ${user.name} at ${clockTime(shift.clockOutAt)} — ${timingNote(shift.clockOutAt, "out", schedule)}.`);
-  }
-  // Handed-back jobs can go to whoever is still on duty.
-  if (handBack.length) runAutoAssign();
+  await clockOutFor(user, Array.isArray(req.body?.handBack) ? req.body.handBack : []);
   res.json(await myStatus(user.id));
 });
 
 // POST /api/duty/break — { minutes }. No new jobs until the break is over.
 dutyRouter.post("/break", requireRole("maintenance"), async (req, res) => {
   const user = currentUser(req);
-  const minutes = Number(req.body?.minutes);
-  if (!BREAK_MINUTES.includes(minutes)) throw badRequest(`A break is ${BREAK_MINUTES.join(", ")} minutes`);
-  const shift = await startBreak(user.id, minutes);
-  if (!shift?.breakUntil) throw badRequest("Clock in first");
-  await tellManagers(`On break: ${user.name} at ${clockTime(new Date())} for ${minutes} min (back at ${clockTime(shift.breakUntil)}).`);
+  await breakFor(user, Number(req.body?.minutes));
   res.json(await myStatus(user.id));
 });
 
 // POST /api/duty/break/end — "I'm back".
 dutyRouter.post("/break/end", requireRole("maintenance"), async (req, res) => {
   const user = currentUser(req);
-  if (await endBreak(user.id)) {
-    await tellManagers(`Back from break: ${user.name} at ${clockTime(new Date())}.`);
-    runAutoAssign();
-  }
+  await endBreakFor(user);
   res.json(await myStatus(user.id));
+});
+
+// ===== For a technician: supervisor and system administrator =====
+// Updating a technician's availability for them, e.g. one who has no phone. The supervisor is the
+// one vouching that they are at work.
+
+// POST /api/duty/staff/:userId/clock-in
+dutyRouter.post("/staff/:userId/clock-in", requireRole("supervisor", "sysadmin"), async (req, res) => {
+  const tech = await technician(String(req.params.userId));
+  await clockInFor(tech, currentUser(req));
+  res.json(await myStatus(tech.id));
+});
+
+// POST /api/duty/staff/:userId/clock-out — { handBack?: [issue ids] }
+dutyRouter.post("/staff/:userId/clock-out", requireRole("supervisor", "sysadmin"), async (req, res) => {
+  const tech = await technician(String(req.params.userId));
+  await clockOutFor(tech, Array.isArray(req.body?.handBack) ? req.body.handBack : [], currentUser(req));
+  res.json(await myStatus(tech.id));
+});
+
+// POST /api/duty/staff/:userId/break — { minutes }
+dutyRouter.post("/staff/:userId/break", requireRole("supervisor", "sysadmin"), async (req, res) => {
+  const tech = await technician(String(req.params.userId));
+  await breakFor(tech, Number(req.body?.minutes), currentUser(req));
+  res.json(await myStatus(tech.id));
+});
+
+// POST /api/duty/staff/:userId/break/end
+dutyRouter.post("/staff/:userId/break/end", requireRole("supervisor", "sysadmin"), async (req, res) => {
+  const tech = await technician(String(req.params.userId));
+  await endBreakFor(tech, currentUser(req));
+  res.json(await myStatus(tech.id));
+});
+
+// ===== Reports: staff manager, supervisor and system administrator =====
+
+// GET /api/duty/attendance?month=2026-11 — the monthly attendance report on the Reports page.
+dutyRouter.get("/attendance", requireRole("admin", "supervisor", "sysadmin"), async (req, res) => {
+  const month = typeof req.query.month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.month) ? req.query.month : localDay().slice(0, 7);
+  res.json({ month, rows: await attendanceReport(month) });
 });
 
 // ===== Staff manager (and system administrator) =====
 dutyRouter.use(requireRole("admin", "sysadmin"));
-
-// GET /api/duty/code — the code to show: today's printed code, or the wall screen's current one.
-dutyRouter.get("/code", async (_req, res) => {
-  const mode = await getCodeMode();
-  const daily = await getDailyCode();
-  const screen = mode === "rotating" ? await getScreenCode() : null;
-  res.json({ mode, day: daily.day, code: screen?.code ?? daily.code, changesAt: screen?.changesAt ?? null, rotateSeconds: ROTATE_SECONDS });
-});
-
-// POST /api/duty/code — new codes now; the old ones stop working straight away.
-dutyRouter.post("/code", async (_req, res) => {
-  await renewCodes();
-  res.json({ ok: true });
-});
-
-// PUT /api/duty/mode — { mode: "daily" | "rotating" }.
-dutyRouter.put("/mode", async (req, res) => {
-  const mode = req.body?.mode;
-  if (mode !== "daily" && mode !== "rotating") throw badRequest("Mode must be daily or rotating");
-  await setCodeMode(mode);
-  res.json({ mode });
-});
 
 // GET /api/duty/shifts — today's clock-ins with names and late / early minutes.
 dutyRouter.get("/shifts", async (_req, res) => {
@@ -211,10 +239,4 @@ dutyRouter.post("/leave", async (req, res) => {
 dutyRouter.delete("/leave/:id", async (req, res) => {
   if (!(await removeLeave(String(req.params.id)))) throw notFound("Leave not found");
   res.json({ ok: true });
-});
-
-// GET /api/duty/attendance?month=2026-11
-dutyRouter.get("/attendance", async (req, res) => {
-  const month = typeof req.query.month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.month) ? req.query.month : localDay().slice(0, 7);
-  res.json({ month, rows: await attendanceReport(month) });
 });

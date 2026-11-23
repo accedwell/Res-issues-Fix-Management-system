@@ -3,72 +3,11 @@ import { createPortal } from 'react-dom'
 import { apiAddLeave, apiRemoveLeave, apiSetSchedule, fetchAttendance } from '../api'
 import { EmptyState } from '../components/common'
 import { Icon } from '../components/Icon'
-import { useApp } from '../context/appContext'
 import { describeHours, leaveSpan, todayLocal, WEEK } from '../dutyUtils'
 import { downloadTableCsv } from '../exportCsv'
-import { useClockCode, useQrImage } from '../useClockCode'
-import { formatTime } from '../utils'
 import type { AttendanceRow, Leave, Schedule, Staff, WorkHours } from '../types'
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong. Please try again.')
-
-// ===== Wall screen =====
-// Full screen for a tablet or old phone on the maintenance office wall. In wall-screen mode the code
-// changes every 30 seconds, so a photo of it is useless almost at once; nobody has to print anything.
-export function WallScreen({ close }: { close: () => void }) {
-  const { staff } = useApp()
-  const { code } = useClockCode()
-  const qr = useQrImage(code?.code, 800)
-  const [now, setNow] = useState(() => Date.now())
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    document.documentElement.requestFullscreen?.().catch(() => undefined)
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
-    window.addEventListener('keydown', onKey)
-    return () => {
-      clearInterval(timer)
-      window.removeEventListener('keydown', onKey)
-      if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined)
-    }
-  }, [close])
-
-  const left = code?.changesAt ? Math.max(0, Math.ceil((Date.parse(code.changesAt) - now) / 1000)) : null
-  const onDuty = staff.filter((s) => s.onDuty)
-
-  return createPortal(
-    <div className="wall-screen">
-      <button className="btn btn-ghost btn-sm wall-close" onClick={close}>
-        <Icon name="x" /> Close
-      </button>
-      <div className="wall-time">{new Date(now).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
-      <h1>Maintenance clock-in</h1>
-      <p>Log in to ResiFix, tap Scan QR code, and point your phone at this code.</p>
-      <div className="wall-qr">{qr ? <img src={qr} alt="Clock-in QR code" /> : <span>Loading…</span>}</div>
-      <div className="wall-code">{code?.code ?? '······'}</div>
-      {left !== null && code && (
-        <div className="wall-timer">
-          <div className="wall-bar">
-            <span style={{ width: `${(left / code.rotateSeconds) * 100}%` }} />
-          </div>
-          New code in {left} s
-        </div>
-      )}
-      <div className="wall-team">
-        {onDuty.length ? (
-          onDuty.map((s) => (
-            <span key={s.id} className={'wall-person' + (s.onBreak ? ' break' : '')}>
-              {s.name} · {s.onBreak && s.breakUntil ? `break until ${formatTime(s.breakUntil)}` : `in since ${formatTime(s.onDutySince ?? '')}`}
-            </span>
-          ))
-        ) : (
-          <span className="wall-person off">Nobody has clocked in yet</span>
-        )}
-      </div>
-    </div>,
-    document.body,
-  )
-}
 
 // ===== Work days and hours =====
 export function HoursEditor({ value, onChange }: { value: WorkHours; onChange: (hours: WorkHours) => void }) {

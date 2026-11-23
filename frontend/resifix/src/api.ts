@@ -6,7 +6,6 @@ import type {
   Category,
   ChatMessage,
   AttendanceRow,
-  ClockCode,
   DutySchedules,
   DutyShift,
   DutyStatus,
@@ -41,6 +40,7 @@ export interface ApiUser {
   block?: string
   room?: string
   specialization?: string
+  phone?: string
   createdAt?: string
 }
 
@@ -149,6 +149,12 @@ export const apiUpdateProgress = (id: string, status: Status, note: string) =>
 export const apiConfirmResolution = (id: string, rating: number | null, comment: string) =>
   request('POST', `/issues/${id}/confirm`, { rating, comment })
 export const apiReportNotFixed = (id: string, reason: string) => request('POST', `/issues/${id}/not-fixed`, { reason })
+// The assigned technician accepts or turns down a new job. A declined job goes to someone else on duty.
+export const apiAcceptJob = (id: string) => request('POST', `/issues/${id}/accept`)
+export const apiDeclineJob = (id: string, reason: string) =>
+  request<{ ok: boolean; passedTo: string | null }>('POST', `/issues/${id}/decline`, { reason })
+// The staff manager phoned the technician, who accepted the job.
+export const apiAcceptedByPhone = (id: string) => request('POST', `/issues/${id}/accepted-by-phone`)
 
 // ===== AI report assistant =====
 
@@ -179,6 +185,7 @@ export interface NewUserInput {
   role: Role
   password: string
   specialization?: string
+  phone?: string
   studentNumber?: string
   block?: string
   room?: string
@@ -187,7 +194,7 @@ export interface NewUserInput {
 export const apiAddUser = (user: NewUserInput) => request('POST', '/users', user)
 export const apiRemoveUser = (id: string) => request<{ unassignedJobs: number }>('DELETE', `/users/${id}`)
 // Students: { block, room }. Maintenance staff: { specialization }.
-export const apiEditUser = (id: string, details: { block?: string; room?: string; specialization?: string }) =>
+export const apiEditUser = (id: string, details: { block?: string; room?: string; specialization?: string; phone?: string }) =>
   request('PATCH', `/users/${id}`, details)
 export const apiAddCategory = (name: string, icon: string) => request('POST', '/categories', { name, icon })
 export const apiEditCategory = (key: string, name: string, icon: string) =>
@@ -207,20 +214,22 @@ export const apiAddPart = (part: PartInput) => request<{ part: SparePart }>('POS
 export const apiEditPart = (id: string, part: PartInput) => request<{ part: SparePart }>('PATCH', `/parts/${id}`, part)
 export const apiRemovePart = (id: string) => request('DELETE', `/parts/${id}`)
 
-// ===== Clock-in (QR code) =====
+// ===== Clock-in =====
 
 // Technicians
 export const fetchMyDuty = () => request<DutyStatus>('GET', '/duty/me')
-export const apiClockIn = (code: string) => request<DutyStatus>('POST', '/duty/clock-in', { code })
+export const apiClockIn = () => request<DutyStatus>('POST', '/duty/clock-in')
 // handBack: unfinished jobs to give back to the staff manager when leaving.
 export const apiClockOut = (handBack: string[] = []) => request<DutyStatus>('POST', '/duty/clock-out', { handBack })
 export const apiStartBreak = (minutes: number) => request<DutyStatus>('POST', '/duty/break', { minutes })
 export const apiEndBreak = () => request<DutyStatus>('POST', '/duty/break/end')
+// The supervisor or system admin updating a technician's availability for them.
+export const apiStaffClockIn = (userId: string) => request('POST', `/duty/staff/${userId}/clock-in`)
+export const apiStaffClockOut = (userId: string, handBack: string[]) => request('POST', `/duty/staff/${userId}/clock-out`, { handBack })
+export const apiStaffBreak = (userId: string, minutes: number) => request('POST', `/duty/staff/${userId}/break`, { minutes })
+export const apiStaffEndBreak = (userId: string) => request('POST', `/duty/staff/${userId}/break/end`)
 
 // Staff manager
-export const fetchClockInCode = () => request<ClockCode>('GET', '/duty/code')
-export const apiRenewClockInCode = () => request<{ ok: boolean }>('POST', '/duty/code')
-export const apiSetCodeMode = (mode: ClockCode['mode']) => request<{ mode: ClockCode['mode'] }>('PUT', '/duty/mode', { mode })
 export const fetchShiftsToday = async () => (await request<{ shifts: DutyShift[] }>('GET', '/duty/shifts')).shifts
 export const fetchSchedules = () => request<DutySchedules>('GET', '/duty/schedules')
 export const apiSetTeamHours = (hours: WorkHours) => request<{ team: WorkHours }>('PUT', '/duty/hours', hours)

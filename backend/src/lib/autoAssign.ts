@@ -7,7 +7,8 @@ import { broadcast } from "./events.js";
 // Runs the Python auto-assigner (backend/auto_assign/assign_issues.py) for one new report.
 // It runs in the background, so the student's "Submit" never waits for the AI. When it finishes,
 // every open browser reloads reports and notifications, so the technician sees the job straight away.
-// If Python or the script is missing, or it fails, the report simply waits for the staff manager as before.
+// If Python or the script is missing, or it fails, the server assigns the report itself instead (see
+// assignWithoutPython), so the student still sees who has it straight away.
 
 const SCRIPT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../auto_assign");
 const SCRIPT = join(SCRIPT_DIR, "assign_issues.py");
@@ -30,6 +31,17 @@ export function runAutoAssign(issueId?: string, ref = "waiting reports"): void {
   if (!isAutoAssignOn()) return;
 
   let output = "";
+  // Runs once, however the Python run ends (it may report an error and then close).
+  let finished = false;
+  const finish = (ok: boolean) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    if (ok) return broadcast(["issues", "notifications", "staff", "duty"]);
+    void assignWithoutPython(issueId)
+      .catch((err) => console.error(`Auto-assign (server) failed for ${ref}:`, err instanceof Error ? err.message : err))
+      .finally(() => broadcast(["issues", "notifications", "staff", "duty"]));
+  };
   const child = spawn(pythonCommand(), issueId ? [SCRIPT, issueId] : [SCRIPT], {
     cwd: SCRIPT_DIR,
     // AUTO_ASSIGN_GROQ_API_KEY gives it its own key, so it doesn't share the assistant's free limit.
@@ -41,14 +53,41 @@ export function runAutoAssign(issueId?: string, ref = "waiting reports"): void {
   child.stderr.on("data", (chunk) => (output += chunk));
 
   child.on("error", (err) => {
-    clearTimeout(timer);
-    console.error(`Auto-assign could not start for ${ref} (${err.message}). It will wait for the staff manager.`);
+    console.error(`Python auto-assign could not start for ${ref} (${err.message}). The server assigns it instead.`);
+    finish(false);
   });
   child.on("close", (code) => {
-    clearTimeout(timer);
     const summary = output.trim().split("\n").slice(-3).join(" | ");
     if (code === 0) console.log(`Auto-assign ${ref}: ${summary}`);
-    else console.error(`Auto-assign failed for ${ref} (exit ${code}): ${summary}`);
-    broadcast(["issues", "notifications", "staff", "duty"]);
+    else console.error(`Python auto-assign failed for ${ref} (exit ${code}): ${summary}. The server assigns it instead.`);
+    finish(code === 0);
   });
+}
+
+// The same job as the Python script, without the AI: gives the report (or every report still waiting)
+// to the best matching technician on duty, using the backend's own rules (assignment.ts). Reports that
+// were assigned in the meantime are left alone. With nobody on duty, an urgent new report alerts the
+// staff manager and it waits for the next technician to clock in.
+async function assignWithoutPython(issueId?: string): Promise<void> {
+  // Loaded here: issueWorkflow.ts itself uses runAutoAssign.
+  const { alertNobodyOnDuty, assignIssue } = await import("../services/issueWorkflow.js");
+  const { getIssue, listIssues } = await import("../store/issues.js");
+  const waiting = (issue: { assignedTo: string | null; status: string }) =>
+    !issue.assignedTo && (issue.status === "Submitted" || issue.status === "Received");
+
+  const issues = issueId
+    ? [await getIssue(issueId)].filter((i) => !!i)
+    : (await listIssues()).filter(waiting).reverse(); // oldest first
+  for (const issue of issues) {
+    if (!waiting(issue)) continue;
+    try {
+      const assigned = await assignIssue(issue.id, undefined, undefined, "automatically by the auto-assigner", true);
+      console.log(`Auto-assign (server) ${issue.ref}: assigned to ${assigned.assignedTo}`);
+    } catch {
+      // Nobody on duty: stop here, the rest would fail the same way.
+      if (issueId) await alertNobodyOnDuty(issue);
+      console.log(`Auto-assign (server) ${issue.ref}: no technician on duty, waiting.`);
+      return;
+    }
+  }
 }

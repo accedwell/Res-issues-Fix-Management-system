@@ -29,6 +29,7 @@ test("account domains and 24-hour follow-up API: validation, access rules, remin
     { id: "followup-admin", role: "ADMIN", email: "followup-admin@resstaff.ac.za" },
     { id: "followup-staff", role: "MAINTENANCE", email: "followup-staff@resstaff.ac.za" },
     { id: "followup-system", role: "SYSADMIN", email: "followup-system@resstaff.ac.za" },
+    { id: "followup-supervisor", role: "SUPERVISOR", email: "followup-supervisor@resstaff.ac.za" },
   ] as const;
   const port = process.env.RESIFIX_TEST_PORT ?? "5012";
   const base = `http://127.0.0.1:${port}/api`;
@@ -56,7 +57,7 @@ test("account domains and 24-hour follow-up API: validation, access rules, remin
     } });
     server = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], {
       cwd: fileURLToPath(new URL("..", import.meta.url)),
-      // AUTO_ASSIGN off: this test assigns reports itself, as a supervisor.
+      // AUTO_ASSIGN off: this test assigns reports itself, as the supervisor.
       env: { ...process.env, DATABASE_URL: databaseUrl, PORT: port, TOKEN_SECRET: process.env.TOKEN_SECRET, AUTO_ASSIGN: "off" },
       stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
     });
@@ -72,6 +73,7 @@ test("account domains and 24-hour follow-up API: validation, access rules, remin
     const admin = await login(users[2].email);
     const staff = await login(users[3].email);
     const system = await login(users[4].email);
+    const supervisor = await login(users[5].email);
 
     const signup = { firstName: "Email", lastName: "Test", studentNumber: "EMAIL-TEST-1", block: "Follow-up Test Block", room: "102", password };
     const wrongSignup = await request<{ error: string }>("/auth/signup", undefined, { ...signup, email: "signup@resStaff.ac.za" });
@@ -83,7 +85,7 @@ test("account domains and 24-hour follow-up API: validation, access rules, remin
     assert.equal(validSignup.data.user.email, "signup@resstudent.ac.za");
     const wrongStudent = await request("/users", system, { name: "Student Test", role: "student", email: "created-student@resStaff.ac.za", password });
     assert.equal(wrongStudent.status, 400);
-    for (const role of ["admin", "maintenance", "sysadmin"]) {
+    for (const role of ["admin", "maintenance", "sysadmin", "supervisor"]) {
       const wrongStaff = await request<{ error: string }>("/users", system, { name: "Staff Test", role, email: `created-${role}@resStudent.ac.za`, password });
       assert.equal(wrongStaff.status, 400);
       assert.match(wrongStaff.data.error, /resStaff\.ac\.za/);
@@ -132,10 +134,11 @@ test("account domains and 24-hour follow-up API: validation, access rules, remin
 
     await prisma.issueHistory.update({ where: { id: followUp.id }, data: { createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) } });
     for (const rows of await Promise.all([notices(), notices()])) assert.equal(reminders(rows).length, 2);
-    for (const token of [student, other, staff, system]) {
+    // Only the supervisor assigns; the staff manager no longer can.
+    for (const token of [student, other, staff, system, admin]) {
       assert.equal((await request(`/issues/${report.id}/assign`, token, { staffId: users[3].id })).status, 403);
     }
-    const assigned = await request<{ issue: Issue }>(`/issues/${report.id}/assign`, admin, { staffId: users[3].id });
+    const assigned = await request<{ issue: Issue }>(`/issues/${report.id}/assign`, supervisor, { staffId: users[3].id });
     assert.equal(assigned.status, 200);
     assert.equal(assigned.data.issue.assignedTo, users[3].id);
     assert.equal(assigned.data.issue.status, "Assigned");

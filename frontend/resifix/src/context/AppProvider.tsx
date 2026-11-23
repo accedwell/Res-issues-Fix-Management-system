@@ -3,7 +3,7 @@ import { AppContext, type AppState } from './appContext'
 import {
   apiAddCategory, apiAddUser, apiEditUser, apiAssignIssue, apiReceiveIssue, apiConfirmResolution, apiCreateIssue, apiEditCategory, apiMe,
   apiReadAllNotifications, apiReadNotification, apiRemoveCategory, apiRemoveUser, apiReportNotFixed, apiEditIssue, apiCancelIssue, apiSetSetting,
-  apiSubmitAssistantReport, apiUpdateProgress, clearToken, connectLiveUpdates, fetchCategories, fetchIssues, fetchNotifications, fetchSettings,
+  apiSubmitAssistantReport, apiUpdateProgress, apiAcceptJob, apiDeclineJob, apiAcceptedByPhone, apiStaffClockIn, apiStaffClockOut, apiStaffBreak, apiStaffEndBreak, clearToken, connectLiveUpdates, fetchCategories, fetchIssues, fetchNotifications, fetchSettings,
   fetchStaff, fetchUsers, getToken, type ApiUser, type Topic, fetchParts, apiTakePart, apiRequestPart, apiRestockPart, apiAddPart, apiEditPart,
   apiRemovePart, apiClockIn, apiClockOut, apiStartBreak, apiEndBreak, fetchMyDuty,
 } from '../api'
@@ -23,6 +23,7 @@ const TOPICS_FOR_ROLE: Record<Role, Topic[]> = {
   maintenance: ['issues', 'notifications', 'categories', 'parts', 'duty'],
   admin: ['issues', 'notifications', 'categories', 'staff', 'parts'],
   sysadmin: ['issues', 'notifications', 'categories', 'staff', 'users', 'settings'],
+  supervisor: ['issues', 'notifications', 'categories', 'staff'],
 }
 
 // The user list shows one "details" column: room for students, job for maintenance staff.
@@ -31,47 +32,24 @@ function toUserRow(user: ApiUser): User {
     user.role === 'student'
       ? [user.block, user.room && 'Room ' + user.room].filter(Boolean).join(' · ')
       : user.role === 'maintenance'
-        ? (user.specialization ?? '')
-        : ''
+        ? [user.specialization, user.phone].filter(Boolean).join(' · ')
+        : (user.phone ?? '')
   return {
     id: user.id, name: user.name, role: ROLE_NAMES[user.role], email: user.email, extra: extra || '—',
-    kind: user.role, block: user.block, room: user.room, specialization: user.specialization,
-  }
-}
-
-// Scanning the clock-in QR code opens ResiFix at #clock-in=CODE. The code is kept for this tab
-// (so it survives logging in first) and taken out of the address bar.
-const CLOCK_IN_KEY = 'resifix-clock-in'
-function readClockInLink(): string | null {
-  const match = /^#clock-in=([A-Za-z0-9]{4,12})$/.exec(window.location.hash)
-  try {
-    if (match) {
-      sessionStorage.setItem(CLOCK_IN_KEY, match[1])
-      history.replaceState(null, '', window.location.pathname + window.location.search)
-      return match[1]
-    }
-    return sessionStorage.getItem(CLOCK_IN_KEY)
-  } catch {
-    return match?.[1] ?? null
-  }
-}
-function forgetClockInLink() {
-  try {
-    sessionStorage.removeItem(CLOCK_IN_KEY)
-  } catch {
-    // Nothing saved.
+    kind: user.role, block: user.block, room: user.room, specialization: user.specialization, phone: user.phone,
   }
 }
 
 // Attendance messages the staff manager gets a pop-up for, as they happen.
 const DUTY_ALERT = /^(Clocked (in|out)|Not clocked in|On break|Back from break|Handed back):/
+// Updates a student should see the moment they happen: who their report was assigned to, when that
+// person accepts it, and when it is fixed or could not be fixed. Their own actions are left out.
+const STUDENT_ALERT = /has been assigned to|is waiting for a technician|accepted the job|has been marked Resolved|could not be resolved|is now (In Progress|Received)/
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong. Please try again.')
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [pendingClockIn, setPendingClockIn] = useState(readClockInLink)
-  // Someone who scanned the QR code while logged out goes straight to the login page.
-  const [route, setRoute] = useState<Route>(() => (pendingClockIn ? 'login' : 'landing'))
+  const [route, setRoute] = useState<Route>('landing')
   const [auth, setAuth] = useState<Auth>(LOGGED_OUT)
   const [restoring, setRestoring] = useState(() => !!getToken())
   const [ready, setReady] = useState(false)
@@ -137,9 +115,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const list = await fetchNotifications()
           // The staff manager gets a pop-up the moment someone clocks in or out.
           const seen = seenNotifications.current
-          if (seen && role === 'admin') {
+          if (seen && (role === 'admin' || role === 'supervisor')) {
             const clock = list.filter((n) => !seen.has(n.id) && !n.read && DUTY_ALERT.test(n.message))
             if (clock.length) showToast(clock.length === 1 ? clock[0].message : `${clock.length} attendance updates — check the bell.`)
+          }
+          // A student gets a pop-up the moment their report is assigned, accepted or fixed.
+          if (seen && role === 'student') {
+            const news = list.filter((n) => !seen.has(n.id) && !n.read && STUDENT_ALERT.test(n.message))
+            if (news.length) showToast(news.length === 1 ? news[0].message : `${news.length} updates on your reports — check the bell.`)
           }
           seenNotifications.current = new Set(list.map((n) => n.id))
           setNotifications(list)
@@ -169,30 +152,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [endSession, showToast],
   )
 
-  // Finishes a clock-in from the QR link: right after logging in, or at once when already logged in.
-  // Returns true when there was one. The code is forgotten first, so it can only run once.
-  const finishClockIn = useCallback(
-    async (role: Role) => {
-      const code = readClockInLink()
-      if (!code) return false
-      forgetClockInLink()
-      setPendingClockIn(null)
-      if (role !== 'maintenance') {
-        showToast('Only maintenance technicians clock in with this QR code.')
-        return true
-      }
-      try {
-        await apiClockIn(code)
-        await refresh(['duty', 'issues', 'notifications'])
-        showToast('You are clocked in. New jobs can come to you now.')
-      } catch (err) {
-        showToast(errorMessage(err))
-      }
-      return true
-    },
-    [refresh, showToast],
-  )
-
   const startSession = useCallback(
     async (name: string, role: Role, userId: string, welcome: boolean, home: { block?: string; room?: string } = {}) => {
       roleRef.current = role
@@ -207,7 +166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (role === 'student' && loadedIssues?.some((issue) => issue.studentId === userId && isOverdue(issue))) {
         setModal({ type: 'overdue' })
       }
-      if ((await finishClockIn(role)) || !welcome) return
+      if (!welcome) return
       try {
         const unread = (await fetchNotifications()).filter((n) => !n.read).length
         if (unread) showToast(`You have ${unread} unread notification${unread === 1 ? '' : 's'} — check the bell.`)
@@ -215,7 +174,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // The bell still shows the count once notifications load.
       }
     },
-    [refresh, showToast, finishClockIn],
+    [refresh, showToast],
   )
 
   // Stay logged in across page refreshes while the saved token is still valid.
@@ -239,22 +198,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', onFocus)
     }
   }, [auth.loggedIn, auth.userId, refresh])
-
-  // Scanning the QR code again while ResiFix is already open in this tab.
-  useEffect(() => {
-    const onHash = () => {
-      const code = readClockInLink()
-      if (!code) return
-      if (roleRef.current) {
-        void finishClockIn(roleRef.current)
-      } else {
-        setPendingClockIn(code)
-        setRoute('login')
-      }
-    }
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
-  }, [finishClockIn])
 
   const setTab = (tab: string) => {
     if (auth.role) setTabs((prev) => ({ ...prev, [auth.role as Role]: tab }))
@@ -322,8 +265,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTab('reports')
         showToast(
           issue.assignedToName
-            ? `Report ${issue.ref} sent to ${issue.assignedToName} in maintenance.`
-            : `Report submitted — reference ${issue.ref}`,
+            ? `Report ${issue.ref} assigned to ${issue.assignedToName} — waiting for them to accept the job.`
+            : `Report ${issue.ref} submitted. Nobody is on duty right now — you will be told who it is assigned to as soon as a technician clocks in.`,
         )
         return true
       } catch (err) {
@@ -355,6 +298,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     cancelReport: (issue) => save(() => apiCancelIssue(issue.id), ISSUE_TOPICS, `${issue.ref} was cancelled.`),
     reportNotFixed: (issue, reason) =>
       save(() => apiReportNotFixed(issue.id, reason), ISSUE_TOPICS, 'Report sent again — the residence team has been notified.'),
+    acceptJob: (issue) => save(() => apiAcceptJob(issue.id), ISSUE_TOPICS, `You accepted ${issue.ref}. The student has been told.`),
+    declineJob: (issue, reason) =>
+      save(() => apiDeclineJob(issue.id, reason), ISSUE_TOPICS, (result) =>
+        result.passedTo
+          ? `You declined ${issue.ref}. It was passed to ${result.passedTo}.`
+          : `You declined ${issue.ref}. The staff manager will assign it to someone else.`,
+      ),
+    confirmAcceptedByPhone: (issue) =>
+      save(
+        () => apiAcceptedByPhone(issue.id),
+        ISSUE_TOPICS,
+        `Recorded: ${issue.assignedToName ?? staff.find((s) => s.id === issue.assignedTo)?.name ?? 'the technician'} accepted ${issue.ref} over the phone.`,
+      ),
+    updateAvailability: (tech, action, extra = {}) => {
+      const steps = {
+        clockIn: [() => apiStaffClockIn(tech.id), `${tech.name} is clocked in and can get new jobs.`],
+        clockOut: [() => apiStaffClockOut(tech.id, extra.handBack ?? []), `${tech.name} is clocked out.`],
+        startBreak: [() => apiStaffBreak(tech.id, extra.minutes ?? 15), `${tech.name} is on a ${extra.minutes ?? 15}-minute break.`],
+        endBreak: [() => apiStaffEndBreak(tech.id), `${tech.name} is back from break.`],
+      } as const
+      const [call, message] = steps[action]
+      return save(call, ['staff', 'issues', 'notifications'], message)
+    },
     addUser: (user) => save(() => apiAddUser(user), ['users', 'staff'], `${user.name} has been added.`),
     editUser: (userId, details) => {
       const name = users.find((u) => u.id === userId)?.name ?? 'User'
@@ -400,9 +366,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     editPart: (id, part) => save(() => apiEditPart(id, part), ['parts'], `${part.name} updated.`),
     removePart: (part) => save(() => apiRemovePart(part.id), ['parts'], `${part.name} removed from the store.`),
     duty,
-    pendingClockIn: !!pendingClockIn,
-    clockIn: (code) =>
-      save(() => apiClockIn(code), ['duty', 'issues', 'notifications'], 'You are clocked in. New jobs can come to you now.'),
+    clockIn: () =>
+      save(() => apiClockIn(), ['duty', 'issues', 'notifications'], 'You are clocked in. New jobs can come to you now.'),
     clockOut: (handBack) =>
       save(
         () => apiClockOut(handBack),

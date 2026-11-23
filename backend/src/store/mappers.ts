@@ -3,7 +3,13 @@ import type { Priority, Role, Status } from "../types.js";
 
 // The app and the database name some values differently. These tables translate both ways.
 
-const ROLE_TO_DB: Record<Role, UserRole> = { student: "STUDENT", maintenance: "MAINTENANCE", admin: "ADMIN", sysadmin: "SYSADMIN" };
+const ROLE_TO_DB: Record<Role, UserRole> = {
+  student: "STUDENT",
+  maintenance: "MAINTENANCE",
+  admin: "ADMIN",
+  sysadmin: "SYSADMIN",
+  supervisor: "SUPERVISOR",
+};
 const STATUS_TO_DB: Record<Status, IssueStatus> = {
   Submitted: "REPORTED",
   Received: "RECEIVED",
@@ -42,6 +48,8 @@ export function fromDay(day: string, offsetMs = 0): Date {
 // History rows record what kind of change it was, for reports.
 export function historyAction(status: Status, note: string): HistoryAction {
   if (/not fixed/i.test(note)) return "REOPENED";
+  // Accepting or declining a job is not a new assignment.
+  if (/^(Accepted|Declined) by /.test(note)) return "STATUS_CHANGED";
   if (status === "Submitted") return "CREATED";
   if (status === "Assigned") return "ASSIGNED";
   if (status === "Resolved") return "RESOLVED";
@@ -58,6 +66,12 @@ export function notificationKind(message: string): { type: NotificationType; tit
   if (/^Not clocked in:/i.test(message)) return { type: "SYSTEM", title: "Not clocked in" };
   if (/^On break:/i.test(message)) return { type: "SYSTEM", title: "On break" };
   if (/^Back from break:/i.test(message)) return { type: "SYSTEM", title: "Back from break" };
+  if (/^Not accepted:/i.test(message)) return { type: "SYSTEM", title: "Job not accepted" };
+  if (/is waiting for a technician: nobody is on duty/i.test(message)) return { type: "STATUS_UPDATED", title: "Waiting for a technician" };
+  if (/^Availability:/i.test(message)) return { type: "SYSTEM", title: "Availability updated" };
+  if (/^Please accept/i.test(message)) return { type: "ISSUE_ASSIGNED", title: "Accept your new job" };
+  if (/^Declined:/i.test(message)) return { type: "STATUS_UPDATED", title: "Job declined" };
+  if (/^Accepted:/i.test(message) || /accepted the job/i.test(message)) return { type: "STATUS_UPDATED", title: "Job accepted" };
   if (/^Handed back:/i.test(message)) return { type: "STATUS_UPDATED", title: "Job handed back" };
   if (/^Leave recorded/i.test(message)) return { type: "SYSTEM", title: "Leave" };
   if (/^Your work hours/i.test(message)) return { type: "SYSTEM", title: "Work hours" };

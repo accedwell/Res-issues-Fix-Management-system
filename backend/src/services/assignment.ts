@@ -20,9 +20,13 @@ export interface StaffWithWorkload {
   name: string;
   specialization: string;
   openJobs: number;
-  // Clocked in with the QR code, and when.
+  // Clocked in, and when.
   onDuty: boolean;
   onDutySince: string | null;
+  // The supervisor / system admin who clocked them in for them; null when they clocked in themselves.
+  clockedInBy: string | null;
+  // Number to call them on (only staff roles load this list).
+  phone: string | null;
   // On a break until breakUntil: clocked in, but no new jobs.
   onBreak: boolean;
   breakUntil: string | null;
@@ -45,6 +49,8 @@ export async function staffWorkload(): Promise<StaffWithWorkload[]> {
       openJobs: issues.filter((i) => i.assignedTo === s.id && !DONE_STATUSES.includes(i.status)).length,
       onDuty: !!shift,
       onDutySince: shift?.clockInAt ?? null,
+      clockedInBy: shift?.clockedInBy ?? null,
+      phone: s.phone ?? null,
       onBreak: !!shift && !available,
       breakUntil: shift && !available ? shift.breakUntil : null,
       onLeaveToday: onLeaveOn(leave, s.id, today),
@@ -57,8 +63,12 @@ export async function staffWorkload(): Promise<StaffWithWorkload[]> {
 // Falls back to general maintenance, then to anyone. People on duty (and not on a break) always come first.
 // With onDutyOnly (automatic assigning), nobody else is picked: undefined means nobody is available.
 // Without it (the staff manager's suggestion), it falls back to everyone when nobody is in.
-export async function recommendStaff(issue: Pick<Issue, "category">, options: { onDutyOnly?: boolean } = {}): Promise<StaffWithWorkload | undefined> {
-  const everyone = await staffWorkload();
+// exclude leaves people out (technicians who already declined this job).
+export async function recommendStaff(
+  issue: Pick<Issue, "category">,
+  options: { onDutyOnly?: boolean; exclude?: string[] } = {},
+): Promise<StaffWithWorkload | undefined> {
+  const everyone = (await staffWorkload()).filter((s) => !options.exclude?.includes(s.id));
   const onDuty = everyone.filter((s) => s.available);
   const staff = onDuty.length || options.onDutyOnly ? onDuty : everyone;
   const specialization = CATEGORY_SPECIALIZATION[issue.category] ?? GENERAL_SPECIALIZATION;

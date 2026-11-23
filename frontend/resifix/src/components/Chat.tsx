@@ -156,7 +156,7 @@ export function ChatModal({ issue, close }: { issue: Issue; close: () => void })
       ) : (
         messages && (
           <p className="chat-readonly">
-            {auth.role === 'admin' ? 'You can read this chat but not reply.' : 'This report is closed, so the chat is read-only.'}
+            {auth.role === 'admin' || auth.role === 'supervisor' ? 'You can read this chat but not reply.' : 'This report is closed, so the chat is read-only.'}
           </p>
         )
       )}

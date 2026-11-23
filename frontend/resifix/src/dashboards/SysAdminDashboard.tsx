@@ -1,8 +1,12 @@
+import { Assignments } from './Assignments'
+import { TeamAvailability } from './TeamAvailability'
 import { Icon } from '../components/Icon'
 import { useApp } from '../context/appContext'
 import { BLOCKS } from '../data/constants'
 
 export function SysAdminDashboard({ tab }: { tab: string }) {
+  if (tab === 'assignments') return <Assignments />
+  if (tab === 'availability') return <TeamAvailability />
   if (tab === 'categories') return <Categories />
   if (tab === 'settings') return <Settings />
   return <Users />

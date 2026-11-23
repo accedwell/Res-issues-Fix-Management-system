@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiRenewClockInCode, apiSetCodeMode, apiSetTeamHours, fetchSchedules, fetchShiftsToday } from '../api'
+import { apiSetTeamHours, fetchSchedules, fetchShiftsToday } from '../api'
 import { EmptyState } from '../components/common'
 import { Icon } from '../components/Icon'
 import { useApp } from '../context/appContext'
 import { describeHours, span } from '../dutyUtils'
-import { openReport } from '../periodReport'
-import { isLocalOnly, useClockCode, useQrImage } from '../useClockCode'
-import { formatDate, formatTime } from '../utils'
-import { HoursEditor, LeaveCard, ScheduleModal, WallScreen } from './dutyParts'
+import { formatTime } from '../utils'
+import { HoursEditor, LeaveCard, ScheduleModal } from './dutyParts'
 import type { DutyShift, DutySchedules, Staff, WorkHours } from '../types'
 
-// The staff manager's clock-in page. Technicians clock in with the QR code at the maintenance office,
-// which proves they are at work. The code is either printed (a new one every day) or shown on a
-// wall screen (a new one every 30 seconds). The page also shows who is in, sets work hours and leave,
-// and lists today's clock-ins with who was late or left early.
+// The staff manager's clock-in page. Technicians clock in from their own "Assigned to Me" page. This
+// page shows who is in, sets work hours and leave, and lists today's clock-ins with who was late or
+// left early.
 
 export function ClockIn() {
   const { staff } = useApp()
@@ -39,13 +36,14 @@ export function ClockIn() {
 
   return (
     <div className="clockin-grid">
-      <CodeCard />
-
       <div>
         <TeamCard plan={plan} edit={setEditing} />
+        <TodayCard shifts={shifts} />
+      </div>
+
+      <div>
         {plan && <TeamHoursCard key={describeHours(plan.team)} team={plan.team} changed={changed} />}
         {plan && <LeaveCard leave={plan.leave} names={names} changed={changed} />}
-        <TodayCard shifts={shifts} />
       </div>
 
       {editing && plan && editingPlan && (
@@ -58,100 +56,6 @@ export function ClockIn() {
           changed={changed}
         />
       )}
-    </div>
-  )
-}
-
-// ===== The code: printed daily, or a wall screen =====
-function CodeCard() {
-  const { code, error, reload } = useClockCode()
-  const qr = useQrImage(code?.code)
-  const [busy, setBusy] = useState(false)
-  const [wall, setWall] = useState(false)
-  const closeWall = useCallback(() => setWall(false), [])
-  const rotating = code?.mode === 'rotating'
-
-  const act = async (action: () => Promise<unknown>) => {
-    setBusy(true)
-    await action().catch(() => undefined)
-    reload()
-    setBusy(false)
-  }
-
-  const renew = () => {
-    const warning = rotating
-      ? 'Make new codes? Any code someone photographed in the last two minutes stops working.'
-      : 'Make a new code? The printed QR code stops working, so print the new one and put it up.'
-    if (window.confirm(warning)) void act(apiRenewClockInCode)
-  }
-
-  const print = () => {
-    if (!code || !qr) return
-    const day = formatDate(code.day)
-    openReport(
-      `<!doctype html><html><head><meta charset="utf-8"><title>ResiFix clock-in ${day}</title>
-      <style>body{font-family:Segoe UI,Arial,sans-serif;text-align:center;color:#0b1f47;margin:48px}
-      h1{font-size:34px;margin:0 0 8px}p{font-size:18px;margin:6px 0}img{width:380px;height:380px;margin:24px 0 12px}
-      .code{font-size:40px;font-weight:800;letter-spacing:.3em;margin:8px 0 18px}.small{font-size:14px;color:#55607a}</style>
-      </head><body>
-      <h1>Maintenance clock-in</h1>
-      <p>Scan with your phone when you arrive. Log in if asked.</p>
-      <img src="${qr}" alt="Clock-in QR code">
-      <p class="small">Can't scan? Type this code in ResiFix:</p>
-      <div class="code">${code.code}</div>
-      <p class="small">Valid on ${day} only. A new code is made every day.</p>
-      </body></html>`,
-      true,
-    )
-  }
-
-  return (
-    <div className="card clockin-qr">
-      <h2>Clock-in QR code</h2>
-      <div className="mode-switch" role="group" aria-label="How the code is shown">
-        <button className={!rotating ? 'on' : ''} disabled={busy || !code} onClick={() => rotating && void act(() => apiSetCodeMode('daily'))}>
-          Printed (daily)
-        </button>
-        <button className={rotating ? 'on' : ''} disabled={busy || !code} onClick={() => !rotating && void act(() => apiSetCodeMode('rotating'))}>
-          Wall screen (30 s)
-        </button>
-      </div>
-      <p className="card-sub">
-        {rotating
-          ? 'Show it on a tablet or old phone at the maintenance office. The code changes every 30 seconds, so a photo of it is useless. Nothing to print.'
-          : 'Print it and put it up at the maintenance office. A new code is made every morning, so print the new one each day.'}
-      </p>
-      {error && <p className="field-error">{error}</p>}
-      {isLocalOnly() && (
-        <p className="clockin-warning">
-          <Icon name="flag" /> This page is open on <b>localhost</b>, so phones can't open this QR code. Open ResiFix at your computer's
-          network address (like http://192.168.0.238:5173) and the QR code will use that address.
-        </p>
-      )}
-      <div className="qr-box">{qr ? <img src={qr} alt="Clock-in QR code" /> : <span>Loading…</span>}</div>
-      {code && (
-        <>
-          <div className="qr-code-text" aria-label="Clock-in code">
-            {code.code}
-          </div>
-          <p className="field-hint">{rotating ? 'Changes every 30 seconds.' : `Valid today (${formatDate(code.day)}).`}</p>
-        </>
-      )}
-      <div className="clockin-actions">
-        {rotating ? (
-          <button className="btn btn-primary btn-sm" onClick={() => setWall(true)} disabled={!code}>
-            <Icon name="eye" /> Open wall screen
-          </button>
-        ) : (
-          <button className="btn btn-primary btn-sm" onClick={print} disabled={!qr}>
-            <Icon name="file-text" /> Print
-          </button>
-        )}
-        <button className="btn btn-ghost btn-sm" onClick={renew} disabled={busy || !code}>
-          <Icon name="refresh" /> New code now
-        </button>
-      </div>
-      {wall && <WallScreen close={closeWall} />}
     </div>
   )
 }
@@ -269,8 +173,11 @@ function TodayCard({ shifts }: { shifts: DutyShift[] }) {
                 {s.onBreak && <span className="timing-tag info">On break</span>}
               </span>
               <span className="duty-times">
-                In {formatTime(s.clockInAt)} ·{' '}
-                {s.clockOutAt ? `Out ${formatTime(s.clockOutAt)}${s.autoClosed ? ' (by the system)' : ''}` : 'still on duty'}
+                In {formatTime(s.clockInAt)}
+                {s.clockedInBy ? ` (by ${s.clockedInBy})` : ''} ·{' '}
+                {s.clockOutAt
+                  ? `Out ${formatTime(s.clockOutAt)}${s.autoClosed ? ' (by the system)' : s.clockedOutBy ? ` (by ${s.clockedOutBy})` : ''}`
+                  : 'still on duty'}
                 {s.breakMinutes > 0 && ` · breaks ${span(s.breakMinutes)}`}
               </span>
             </li>

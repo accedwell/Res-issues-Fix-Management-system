@@ -43,11 +43,21 @@ export interface AppState {
   updateProgress: (issue: Issue, status: Status, note: string) => Promise<boolean>
   confirmResolution: (issue: Issue, rating: number | null, comment: string) => Promise<boolean>
   reportNotFixed: (issue: Issue, reason: string) => Promise<boolean>
+  // Maintenance: accept or turn down a job assigned to them. Staff manager: record it was accepted by phone.
+  acceptJob: (issue: Issue) => Promise<boolean>
+  declineJob: (issue: Issue, reason: string) => Promise<boolean>
+  confirmAcceptedByPhone: (issue: Issue) => Promise<boolean>
+  // Supervisor / system admin: clock a technician in or out, or start / end their break, for them.
+  updateAvailability: (
+    tech: Staff,
+    action: 'clockIn' | 'clockOut' | 'startBreak' | 'endBreak',
+    extra?: { minutes?: number; handBack?: string[] },
+  ) => Promise<boolean>
   editReport: (issue: Issue, changes: Omit<NewIssue, 'photo'>) => Promise<boolean>
   cancelReport: (issue: Issue) => Promise<boolean>
   addUser: (user: NewUserInput) => Promise<boolean>
   removeUser: (userId: string) => Promise<boolean>
-  editUser: (userId: string, details: { block?: string; room?: string; specialization?: string }) => Promise<boolean>
+  editUser: (userId: string, details: { block?: string; room?: string; specialization?: string; phone?: string }) => Promise<boolean>
   addCategory: (name: string, icon: string) => Promise<boolean>
   editCategory: (key: string, name: string, icon: string) => Promise<boolean>
   removeCategory: (key: string) => Promise<boolean>
@@ -60,10 +70,8 @@ export interface AppState {
   removePart: (part: SparePart) => Promise<boolean>
   // Maintenance only: whether they are clocked in. Null for other roles.
   duty: DutyStatus | null
-  // True when the clock-in QR code was scanned and is waiting for the technician to log in.
-  pendingClockIn: boolean
-  // Clock in with today's code (from the QR code, or typed), and clock out.
-  clockIn: (code: string) => Promise<boolean>
+  // Clock in when starting work, and clock out.
+  clockIn: () => Promise<boolean>
   // handBack: unfinished jobs given back to the staff manager when leaving.
   clockOut: (handBack: string[]) => Promise<boolean>
   startBreak: (minutes: number) => Promise<boolean>

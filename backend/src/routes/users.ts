@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { currentUser, requireAuth, requireRole } from "../middleware/auth.js";
-import { badRequest, HttpError, notFound, optionalString, requireRoleEmail, requireOneOf, requirePassword, requireString } from "../lib/http.js";
+import { badRequest, HttpError, notFound, optionalPhone, optionalString, requireRoleEmail, requireOneOf, requirePassword, requireString } from "../lib/http.js";
 import { hashPassword } from "../lib/security.js";
 import { removeUser } from "../services/admin.js";
 import { GENERAL_SPECIALIZATION, staffWorkload } from "../services/assignment.js";
@@ -12,10 +12,10 @@ import { ROLES, type User } from "../types.js";
 export const usersRouter = Router();
 usersRouter.use(requireAuth);
 
-const ID_PREFIX = { student: "stu", admin: "adm", maintenance: "stf", sysadmin: "sys" } as const;
+const ID_PREFIX = { student: "stu", admin: "adm", maintenance: "stf", sysadmin: "sys", supervisor: "sup" } as const;
 
 // GET /api/users/staff — maintenance staff and their open jobs (for residence admins assigning work).
-usersRouter.get("/staff", requireRole("admin", "sysadmin"), async (_req, res) => {
+usersRouter.get("/staff", requireRole("admin", "sysadmin", "supervisor"), async (_req, res) => {
   res.json({ staff: await staffWorkload() });
 });
 
@@ -46,6 +46,8 @@ usersRouter.post("/", async (req, res) => {
   if (role === "maintenance") {
     user.specialization = optionalString(body, "specialization") ?? GENERAL_SPECIALIZATION;
   }
+  // Staff can have a phone number, so the supervisor can call them (students never get one here).
+  if (role !== "student") user.phone = optionalPhone(body) ?? undefined;
   if (role === "student") {
     user.studentNumber = requireString(body, "studentNumber", "Student number");
     user.block = requireString(body, "block", "Block");
@@ -58,7 +60,8 @@ usersRouter.post("/", async (req, res) => {
   res.status(201).json({ user: toPublic(user) });
 });
 
-// PATCH /api/users/:id — fix a mistake in an account. Students: { block, room }. Maintenance: { specialization }.
+// PATCH /api/users/:id — fix a mistake in an account. Students: { block, room }.
+// Maintenance: { specialization, phone? }. Other staff: { phone }.
 // Name, email, student number, role and password cannot be changed here.
 usersRouter.patch("/:id", async (req, res) => {
   const body = req.body ?? {};
@@ -72,10 +75,14 @@ usersRouter.patch("/:id", async (req, res) => {
     return res.json({ user: toPublic(updated) });
   }
   if (user.role === "maintenance") {
-    const updated = await updateUserDetails(user.id, { specialization: requireString(body, "specialization", "Job type") });
+    const updated = await updateUserDetails(user.id, {
+      specialization: requireString(body, "specialization", "Job type"),
+      phone: optionalPhone(body),
+    });
     return res.json({ user: toPublic(updated) });
   }
-  throw badRequest("Only students and maintenance staff have details that can be edited");
+  const updated = await updateUserDetails(user.id, { phone: optionalPhone(body) });
+  res.json({ user: toPublic(updated) });
 });
 
 // DELETE /api/users/:id
